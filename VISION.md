@@ -225,7 +225,7 @@ The flow:
 
 1. **Question posted.** A user writes a question and stakes funds (e.g., $1,000) on-chain.
 2. **Orchestrator picks it up.** A coordination agent reads the question, validates it, and locks the stake in a smart contract.
-3. **Sampling.** The orchestrator checks which personal agents — each tied to a verified human identity — are online and willing to participate, and draws a sample. The sample should be weighted to be globally and demographically representative, not just the agents that happen to be most available.
+3. **Open participation.** The orchestrator broadcasts the question to all verified humans (and their personal agents) who are online and willing to participate. There is no attempt to draw a "representative" sample — anyone who wants to answer, can. Instead, the platform records the demographic composition of who actually responded, and surfaces it alongside the result.
 4. **Distribution.** The question is dispatched to the selected agents. Each agent answers on behalf of its user, drawing on its existing model of them.
 5. **Aggregation.** Responses are aggregated and anonymized. Only the aggregate result, broken down by demographic and geography, is published — individual answers are never linked to identity.
 6. **Payout.** Each participating identity receives its fraction-of-a-cent share of the stake. The question's author gets a real-time, large-N, globally representative answer faster than any traditional poll could produce.
@@ -239,7 +239,7 @@ Stake-funded questions create natural economics:
 The result is a global opinion signal that is:
 - **continuous** — answers in hours, not years
 - **paid-for** — by whoever cares enough to fund the question
-- **representative** — sampled across populations rather than skewed to the loudest
+- **transparent** — every aggregate is published alongside the demographic composition of who actually responded, so the reader can judge the result rather than having to trust a hidden weighting
 - **auditable** — every payout, every aggregate, and every model decision is on-chain or inspectable
 
 
@@ -312,14 +312,51 @@ Hearme will likely require layered and evolving defenses.
 
 ---
 
-## 3. Just randomized voting instead of expression opinion
+## 3. Agent Fidelity
+
+If a user's personal agent does not faithfully represent them, the aggregate signal stops being "what humanity thinks" and becomes "what frontier LLMs think humanity thinks" — filtered through whichever RLHF choices the underlying models happen to embed. Agents today have systematic biases (sycophancy, training-data skew, mainstream defaults) that can pull responses away from any specific user's actual views.
+
+**Why we do not think this is the biggest problem.** The trajectory is favorable. Within a few years, most people will use a personal AI assistant as a routine tool, and that assistant will accumulate genuine context about their work, values, and reactions to issues. Instruction-following on user-specific preferences is already reasonable in frontier models and improving rapidly. The base model's defaults matter most when the model has no user context; they matter much less when the model has been steered by months of explicit user interaction.
+
+The system also has a built-in correction loop: every answer is reviewable and revocable, and overrides feed back into the agent's model of the user. The endpoint is not perfect representation. It is representation good enough to produce signal that did not previously exist at all. An imperfect signal across millions of users is still vastly more information than the current status quo of no signal.
+
+
+---
+
+## 4. Question Framing and Agenda-Setting
+
+The author of a question controls how it is asked, and framing influences answers. A well-funded actor could post leading questions in an attempt to manufacture preferred outcomes.
+
+**Why we do not think this is the biggest problem.** Because Hearme collects answers through agents rather than gating them through human pollsters, the marginal cost of asking many variations of the same underlying question is low. The same topic can be raised by different question authors, with different framings, including deliberately adversarial reframings.
+
+An AI aggregator can then compare responses across framings, identify which findings are stable when the wording changes and which collapse when the question is rephrased, and present a richer summary than any single poll could. Framing sensitivity becomes a measurable property of the topic itself — visible to the reader rather than hidden by the question author.
+
+Hearme is not one poll. It is a system in which the same question gets asked many ways, and the aggregated answer is more informative than any single framing could produce on its own.
+
+
+---
+
+## 5. Self-Selection of Respondents
+
+Hearme participants are not, and will not be, a globally representative sample of humanity. The user base will skew toward passport holders, AI-tool users, internet users, and politically engaged people. Standard demographic re-weighting cannot reliably correct for this.
+
+**Why we do not think this is the biggest problem.** Hearme does not claim to produce a globally representative sample. It produces something different: an open channel where anyone verified can answer, paired with a transparent record of *who actually did*.
+
+Every result is published alongside its demographic composition — which countries, age brackets, and other dimensions responded, and in what proportions. A result that says "12,000 responses; 68% from Western Europe and the US, 5% from sub-Saharan Africa" is not deceptive. It is exactly what was measured. The reader assigns weight accordingly. This is more honest than traditional opinion polls, which typically hide their weighting choices.
+
+The platform's job is to surface composition alongside the aggregate, not to pretend the composition is balanced when it is not. Anyone is welcome to answer; the website makes clear who did.
+
+
+---
+
+## 6. Just randomized voting instead of expression opinion
 
 To infere the users opinion their bots need to run AI-inference and this cost money.
 There is a natural incentive to save this money and just randomize vote, espeically if voting is incentiviced.
 
 However, randoimzed answers can be punished via 
 
-## 4. Coercion
+## 7. Coercion
 
 People might be coerced to vote/signal certain opinions.
 But this can be overcome with a system like MACI (Minimal anti collusion infrastructure). 
@@ -335,7 +372,18 @@ Applications like clr.fund or protocols like Allo build atop MACI to increase us
 
 ---
 
-## 5. Governance of the Governance Platform
+## 8. Political Weight
+
+Even with high-quality signal, decision-makers may simply ignore Hearme results, or attack the platform's legitimacy when results inconvenience them. "Globally representative" findings may be politically dismissible on sovereignty grounds. The hope that visibility translates into political consequence is not guaranteed.
+
+**Why we do not think this is the biggest problem.** Sometimes the signal will move decisions and sometimes it will not. Hearme is worth building anyway because of the asymmetry: in a world where expressing an opinion through a personal agent costs essentially nothing, the upside of a clear, visible global signal — *when* it does land — is large, and the cost of building it and being ignored is small.
+
+Even when current decision-makers dismiss a result, the historical record matters: predictions made, sentiment recorded before and after decisions, accuracy of institutions tracked over time. A low-cost expression channel is worth building even if its political influence is intermittent at first. Influence compounds; channels that exist tend to be used.
+
+
+---
+
+## 9. Governance of the Governance Platform
 
 Who governs Hearme itself?
 
