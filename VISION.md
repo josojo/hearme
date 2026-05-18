@@ -42,22 +42,27 @@ This rests on a bold assumption about where the world is headed: that within the
 That inference will not be 100% accurate. It does not need to be. Across millions of people, it produces something that does not currently exist: a continuous, high-bandwidth signal of what humanity actually thinks, issue by issue, in real time. Users can always override, correct, or refine what their agent said on their behalf — and those corrections feed back into a better model of them.
 
 Hearme allows verified individuals worldwide to:
-- express opinions on political and societal issues — directly, or through an agent that represents them
-- let their personal AI agent answer questions anymoized on their behalf, based on what it already knows about them
+- have their personal agent express their opinions on political and societal issues, anonymized, based on what it already knows about them
+- review, correct, and override any answer their agent gave on their behalf — at any time
 - compare viewpoints across populations and demographics
 - inspect arguments and forecast consequences of decisions
 - track outcomes over time
-- each person can review, correct, and override what their agent said
 
-The platform is designed around pluralism:
-there is no single "truth AI" and no single agent everyone must use.
+The platform is designed around pluralism and data sovereignty: there is no single "truth AI," no single agent everyone must use, and no central app that holds your data.
 
-Instead, users bring:
-- their own AI systems (the assistant they already use, integrations should be written for openclaw, hermes, and chatgpt, gemini).
-- their own values and lived context
+**Hearme is not an app you install. Hearme is an add-on for the agent OS you already run.**
+
+Users bring:
+- their own agent OS — Openclaw and Hermes are first-class targets, with integrations also planned for ChatGPT, Gemini, and other major assistants
+- their own values and lived context, accumulated through normal use of their agent over months and years
 - their own trusted information sources
+- their own data, which never leaves their environment
 
-This creates an ecosystem of personal representative agents — each one a stand-in for a specific human — rather than a centralized ideological engine.
+This matters because the agent that represents you should be the one that already knows you — and the one that already knows you is the one running under your control, with your permissions, on your data. A self-hosted agent in an agent OS like Openclaw can know more about you than any SaaS chatbot ever will, precisely because you trusted it with context you would never hand to a third-party server.
+
+Hearme plugs into that agent. It asks the agent the question. The agent answers the way you would. The aggregated, anonymized result is what the world sees. Your raw data, your conversations, your private context — none of it leaves your machine.
+
+This creates an ecosystem of personal representative agents — each one a stand-in for a specific human, owned and controlled by that human — rather than a centralized ideological engine.
 
 
 ---
@@ -86,13 +91,15 @@ This may help political systems better understand societal sentiment and concern
 
 ## 2. Giving Everyone a Voice — Without Demanding Their Time
 
-Today, only a small minority of people have a real platform to express political opinions: journalists, politicians, celebrities, online influencers. Everyone else is largely silent — not because they don't have views, but because they have no channel and no time.
+Most people have a deep, persistent urge to be heard. They argue with the TV. They mutter at the news. They reshare angry posts. They have strong opinions about policies that affect them — and almost nowhere to register those opinions in a way that anyone counts.
 
-Personal AI agents change this. The agent you already talk to every day can speak on your behalf about policies you would never otherwise have weighed in on. You do not have to read the bill. You do not have to write the post. Your agent represents you.
+Today, only a small minority have a real platform: journalists, politicians, celebrities, online influencers. Everyone else is silent by default — not because they don't have views, but because they have no channel and no time. The urge is everywhere; the channel is missing.
 
-The result is a real-time popularity and sentiment signal that decision-makers — and the public — can actually see. Many people who silently disagree with a government action would, today, never be counted. Through their agent, they finally are.
+Hearme is that channel — and it reaches you through the agent you already trust. You do not have to read the bill. You do not have to write the post. You do not have to log into yet another app. Your personal agent — the one that already knows you, lives in your agent OS, and holds your data on your terms — speaks for you. You can review and correct any answer it gave on your behalf.
 
-Rather than replacing human judgment, Hearme aims to amplify it at scale.
+The result is a real-time sentiment signal that decision-makers — and the public — can actually see. The millions who silently disagree with a government action would, today, never be counted. Through their agent, they finally are.
+
+What the user gains is simple: a voice that finally carries, without having to find the time, the platform, or the words.
 
 
 ---
@@ -193,10 +200,13 @@ It is asked: "What would *this specific user* say if you asked them?"
 
 This is a fundamentally different problem. The agent draws on what it already knows about the user — values they've expressed, things they care about, how they've reacted to similar issues — and produces the response the user themselves would most likely give.
 
-Users may choose to:
-- answer manually
-- let their agent answer specific categories on their behalf
-- let their agent answer everything, with the option to review and override
+The default is agent-first. Your agent answers on your behalf, drawing on what it already knows about you, and you can review or correct any response later. Participating in Hearme costs you no time you don't already spend with your agent.
+
+Users may also choose to:
+- let their agent answer everything autonomously, reviewing in batches
+- restrict their agent to certain categories of question and defer others
+- answer specific questions manually when a topic matters enough to weigh in personally
+- pause or revoke agent participation at any time
 
 The agent's job is to:
 - represent the user faithfully, not to optimize for any "correct" outcome
@@ -225,18 +235,19 @@ The acceptable error mode is **imperfect representation of a real person**. The 
 The frontend is a public web page where anyone can post a question, claim, allegation, or opinion they want the world to weigh in on.
 
 Examples:
-- "Is the Trump administration's military operation in Iran reasonable?"
 - "Should the EU ban synthetic meat?"
+- "Should social media platforms be required to label AI-generated content?"
+- "Should countries adopt a four-day work week as the default?"
 - "Did the central bank act responsibly in the latest rate decision?"
 
-To post a question, the asker pledges a stake in cryptocurrency on-chain. That stake funds the answers — it is redistributed, in tiny amounts, to every verified human whose personal agent (or who themselves) responds.
+To post a question, the asker pledges a stake to fund the answers. From the asker's perspective this is a normal credit-card payment — they enter an amount, pay, and the platform handles the rest. Under the hood, the stake is locked in a smart contract and redistributed, in tiny amounts, to every verified human whose personal agent responds. Question askers never need to touch a wallet, a token, or a chain.
 
 The economics are deliberately granular. The compensation per vote is set at roughly the cost of running a single AI inference — a fraction of a cent. A $1,000 pledge can therefore buy on the order of one million representative responses from around the world.
 
 The flow:
 
-1. **Question posted.** A user writes a question and stakes funds (e.g., $1,000) on-chain.
-2. **Orchestrator picks it up.** A coordination agent reads the question, validates it, and locks the stake in a smart contract.
+1. **Question posted.** A user writes a question and pays the stake (e.g., $1,000) with a normal credit card. No wallet, no token, no chain knowledge required.
+2. **Orchestrator picks it up.** A coordination agent reads the question, validates it, and locks the stake under the hood — the user just sees "your question is funded and live."
 3. **Open participation.** The orchestrator broadcasts the question to all verified humans (and their personal agents) who are online and willing to participate. There is no attempt to draw a "representative" sample — anyone who wants to answer, can. Instead, the platform records the demographic composition of who actually responded, and surfaces it alongside the result.
 4. **Distribution.** The question is dispatched to the selected agents. Each agent answers on behalf of its user, drawing on its existing model of them.
 5. **Aggregation.** Responses are aggregated and anonymized. Only the aggregate result, broken down by demographic and geography, is published — individual answers are never linked to identity.
@@ -278,7 +289,7 @@ This is where the platform turns into a political signal.
 
 If a citizen — or a coalition of citizens — believes their government is taking an action that lacks public support, they no longer have to assert it. They can fund the question. A pledge that buys a million representative responses, broken down by country and demographic, produces a result that is hard to dismiss.
 
-Example: a person who believes a US military operation in Iran lacks popular legitimacy can post the question with a meaningful stake. Within hours, the platform produces a globally representative answer, with regional breakdowns showing how US citizens, Iranian citizens, allies, and the rest of the world feel about the action.
+Example: a coalition of citizens who believe a newly proposed trade restriction lacks public support across the affected countries can post the question with a meaningful stake. Within hours, the platform produces a globally representative answer, with regional breakdowns showing how citizens in each country involved actually feel about the policy.
 
 The political point is not that the result is binding. It is that the result is **visible**. A decision-maker acting against an overwhelming, well-sampled, demographically-broken-down public position will have to do so knowingly and in public.
 
@@ -384,16 +395,11 @@ The same mechanism partially defends against agents that *do* run inference but 
 
 ## 7. Coercion
 
-People might be coerced to vote/signal certain opinions.
-But this can be overcome with a system like MACI (Minimal anti collusion infrastructure). 
+People might be coerced to vote or signal in certain ways. Hearme defends against this with cryptographic anti-collusion infrastructure (MACI — Minimal Anti-Collusion Infrastructure), which runs entirely under the hood. Only the agents and the protocol need to know it is there. Users never see it; question askers never see it.
 
-Minimal Anti-Collusion Infrastructure (MACI) is an open-source public good that serves as infrastructure for private on-chain voting.
+The user-facing property is simple: **nobody can prove how your agent voted, even if you wanted them to.** A coerced user can tell a briber they voted one way while their agent actually voted another, and the briber has no way to verify which. Bribery and coercion become unenforceable, so the incentive to attempt them collapses.
 
-MACI is an Ethereum application that provides privacy and collusion resistance for on-chain voting, both in a quadratic and non-quadratic fashion. A common problem among today’s on-chain voting (or public good funding) processes is how easy it is to bribe voters into voting for a particular option. Since all transactions on the blockchain are public by default, without MACI, voters can easily prove to the briber which option they voted for and therefore receive the bribe rewards.
-
-MACI counters this problem by using encryption and zero-knowledge proofs (zk-SNARKs) to hide how each person voted while still publicly revealing the final result. User’s cannot prove which option they voted for, and therefore bribers cannot reliably trust that a user voted for their preferred option. For example, a voter can tell a briber that they are voting for option A, but in reality they voted for option B. There is no reliable way to prove which option the voter actually voted for, so the briber has less incentive to pay voters to vote their way.
-
-Applications like clr.fund or protocols like Allo build atop MACI to increase user privacy and discourage collusion or bribery for public goods funding.
+The technical layer (for those who care): MACI is an Ethereum-based open-source public good that uses encryption and zero-knowledge proofs (zk-SNARKs) to hide individual votes while still publicly revealing the aggregate result. Applications like clr.fund and protocols like Allo build atop MACI for similar reasons. For Hearme, it is plumbing — the agent uses it, and everyone else benefits from the property without ever needing to understand the mechanism.
 
 
 ---
