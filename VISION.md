@@ -208,6 +208,73 @@ The acceptable error mode is **imperfect representation of a real person**. The 
 
 ---
 
+# How It Works: Stake-Funded Question Markets
+
+The frontend is a public web page where anyone can post a question, claim, allegation, or opinion they want the world to weigh in on.
+
+Examples:
+- "Is the Trump administration's military operation in Iran reasonable?"
+- "Should the EU ban synthetic meat?"
+- "Did the central bank act responsibly in the latest rate decision?"
+
+To post a question, the asker pledges a stake in cryptocurrency on-chain. That stake funds the answers — it is redistributed, in tiny amounts, to every verified human whose personal agent (or who themselves) responds.
+
+The economics are deliberately granular. The compensation per vote is set at roughly the cost of running a single AI inference — a fraction of a cent. A $1,000 pledge can therefore buy on the order of one million representative responses from around the world.
+
+The flow:
+
+1. **Question posted.** A user writes a question and stakes funds (e.g., $1,000) on-chain.
+2. **Orchestrator picks it up.** A coordination agent reads the question, validates it, and locks the stake in a smart contract.
+3. **Sampling.** The orchestrator checks which personal agents — each tied to a verified human identity — are online and willing to participate, and draws a sample. The sample should be weighted to be globally and demographically representative, not just the agents that happen to be most available.
+4. **Distribution.** The question is dispatched to the selected agents. Each agent answers on behalf of its user, drawing on its existing model of them.
+5. **Aggregation.** Responses are aggregated and anonymized. Only the aggregate result, broken down by demographic and geography, is published — individual answers are never linked to identity.
+6. **Payout.** Each participating identity receives its fraction-of-a-cent share of the stake. The question's author gets a real-time, large-N, globally representative answer faster than any traditional poll could produce.
+7. **Review.** Users can later inspect how their agent answered on their behalf and override the response. Corrections feed back into the agent's model of them.
+
+Stake-funded questions create natural economics:
+- Important or contested questions attract larger pledges and therefore larger samples.
+- Frivolous questions are economically self-limiting.
+- The inference cost is covered, so honest agents are not penalized for doing the work.
+
+The result is a global opinion signal that is:
+- **continuous** — answers in hours, not years
+- **paid-for** — by whoever cares enough to fund the question
+- **representative** — sampled across populations rather than skewed to the loudest
+- **auditable** — every payout, every aggregate, and every model decision is on-chain or inspectable
+
+
+## Results and the Public Signal
+
+The same web page that lets users post questions also surfaces the results — and that surfacing is where the political signal lives.
+
+Visitors can browse:
+- the most-staked open questions (where the most money is currently waiting to compensate voters)
+- the most-answered questions (where the largest representative samples have already responded)
+- recently resolved questions and their aggregate outcomes
+- trending topics by region or demographic
+
+For any given question, the page shows:
+- how many verified humans answered
+- support, opposition, and uncertainty as percentages
+- breakdowns by region, country, age, gender, and other demographic dimensions the respondent consented to share
+- how the distribution has shifted over time as more responses come in
+- (optionally) a sample of anonymized reasoning from agents whose users consented to share it
+
+Everything is anchored on-chain, but the website turns the raw data into a human-readable view that anyone can browse.
+
+This is where the platform turns into a political signal.
+
+If a citizen — or a coalition of citizens — believes their government is taking an action that lacks public support, they no longer have to assert it. They can fund the question. A pledge that buys a million representative responses, broken down by country and demographic, produces a result that is hard to dismiss.
+
+Example: a person who believes a US military operation in Iran lacks popular legitimacy can post the question with a meaningful stake. Within hours, the platform produces a globally representative answer, with regional breakdowns showing how US citizens, Iranian citizens, allies, and the rest of the world feel about the action.
+
+The political point is not that the result is binding. It is that the result is **visible**. A decision-maker acting against an overwhelming, well-sampled, demographically-broken-down public position will have to do so knowingly and in public.
+
+The hope is that this visibility carries weight: that "I didn't know how unpopular this was" stops being a defensible position, and that consistent divergence between policy and well-measured public sentiment becomes politically costly.
+
+
+---
+
 # Main Challenges
 
 ## 1. Legitimacy
