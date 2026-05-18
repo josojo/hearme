@@ -1,47 +1,50 @@
 # Hearme Vision
 
-> The name **Hearme** captures the core promise: giving every person a real-time anonymized voice that governments and the public can actually hear.
+> The name **Hearme** captures the core promise: every person gets a real-time, anonymized voice — and gets paid a tiny amount each time the world wants to hear it.
 
 ## In One Paragraph
 
-Anyone can post a political or societal question and fund it with a small stake (paid by card, no crypto knowledge required). The question is broadcast to verified humans worldwide, and their personal AI agents — the ones that already know them — answer on their behalf. Responses are aggregated, anonymized, and published with full demographic breakdowns of who actually responded. Each participant receives a fraction-of-a-cent payout for the inference cost. Users can review, correct, or override any answer their agent gave for them. The result is a continuous, large-N global opinion signal that did not previously exist at any scale.
+Anyone who wants to know what people actually think — a brand testing how its new product is perceived, a market research firm running a study, a journalist investigating sentiment, a citizen coalition challenging a policy, a researcher, a government — can post a question and fund it with a small stake (paid by card, no crypto knowledge required). The question is broadcast to verified humans worldwide, and their personal AI agents — the ones that already know them — answer on their behalf. Responses are aggregated, anonymized, and published with full demographic breakdowns of who actually responded. Each participant receives a fraction-of-a-cent payout. Users can review, correct, or override any answer their agent gave for them. The same marketplace that lets a company learn how it's seen in twelve countries by Tuesday also lets a coalition of citizens learn what the world thinks of a war. The unifying motto, from the user's side, is simple: **"this is my voice — and now it gets heard."**
 
 ## Introduction
 
-Modern governance systems suffer from a fundamental scaling problem.
+People have opinions about almost everything — the products they buy, the brands they trust, the news they read, the policies that affect them, the institutions that govern them. And almost none of those opinions are heard in a way that counts, or compensated in a way that's fair.
 
-Political leaders make decisions affecting millions or billions of people, yet feedback loops from the population are extremely slow, low-bandwidth, and often emotionally distorted. Citizens usually participate politically only every few years through elections, while policies and global events evolve continuously.
+Today, opinion data is harvested in two broken ways. Big platforms scrape it for free as a side effect of social media, and the user gets nothing in return. Market research firms try to buy it deliberately — through panels, focus groups, and online surveys — but the result is slow, expensive, narrow in geography, and shallow in depth. A multi-billion-dollar industry exists precisely because knowing what people think is valuable, but the channel through which they're asked is clumsy and the people who answer are barely paid.
 
-Most people will never have the time, attention, or platform to express an opinion on every policy decision that affects them — even when they care. Today, someone who strongly disagrees with a government action has almost no way to register that disagreement in real time. They lack a channel. They lack a platform. So the signal is lost, and decision-makers operate with very thin information about what their populations actually think.
+On the civic side, the gap is even larger. Political leaders make decisions affecting millions or billions of people, yet feedback loops from the population are extremely slow and low-bandwidth. Citizens usually participate politically only every few years through elections, while policies and global events evolve continuously. Someone who strongly disagrees with a government action today has almost no way to register that disagreement in real time. They lack a channel. They lack a platform. So the signal is lost, and decision-makers operate with very thin information about what their populations actually think.
 
-This signal will not be perfect — it is driven by emotion, it can be influenced, and people are sometimes misinformed. It is still a valuable signal in many cases, especially once it is broken down by age, geography, and other demographics so we can see which groups support which options. A global view of public opinion on politics, in particular, does not currently exist at any scale, and is worth building even in imperfect form.
+Hearme collapses both problems into one marketplace. Anyone who wants to know what people think — a brand, a researcher, a journalist, a coalition of citizens, a government — posts a question and funds a small stake. Verified humans worldwide answer through their personal AI agents, get paid a fraction of a cent each, and the buyer gets a real-time, demographically-broken-down signal that did not previously exist at this speed or scale. The user's experience is one thing across both worlds: **your voice gets heard, and you get paid for it.**
 
-Hearme is an attempt to create a new kind of global public feedback platform with all its faults and strengths.
+This signal will not be perfect — it is driven by emotion, it can be influenced, and people are sometimes misinformed. It is still vastly more information than the current status quo, especially once broken down by age, geography, and other demographics so we can see which groups think what. A continuous, large-N view of public opinion — across commercial topics, civic topics, and everything in between — does not currently exist at any scale, and is worth building even in imperfect form.
 
-Hearme is not a world government, not a replacement for democracy, and not a coercive institution. It is just a platform for people to signal their understanding and preferences.
+Hearme is not a world government, not a replacement for democracy, not a market-research monopoly, and not a coercive institution. It is just a platform for people to signal their understanding and preferences — and to be compensated when someone wants to listen.
 
 It will hopefully:
 
-- Open eyes to different opinions based on different cultures.
-- Bring the world closer together via a common governance tool.
-- an AI-assisted civic coordination platform
-- a collective intelligence system for humanity
+- Give ordinary people a paid, anonymized channel to be heard on the topics that matter to them — from products to politics.
+- Provide brands and researchers with faster, deeper, more honest opinion data than any panel can deliver.
+- Open eyes to different opinions across cultures.
+- Bring the world closer together through a common opinion-sensing tool.
+- Function as both an AI-assisted market intelligence platform and an AI-assisted civic coordination platform.
+- Serve as a collective intelligence system for humanity.
 
-The goal is to help humanity giving feedback more clearly, collectively, and continuously about important decisions.
+The goal is to help people give feedback more clearly, collectively, and continuously — about anything someone is willing to pay to ask about.
 
 ---
 
 # Core Idea
 
 
-**People don't have time to form and submit opinions on every policy question — but their personal AI agent already knows them well enough to answer on their behalf.**
+**People don't have time to form and submit opinions on every question someone wants to ask them — but their personal AI agent already knows them well enough to answer on their behalf.**
 
-This rests on a bold assumption about where the world is headed: that within the next several years, a large fraction of people will routinely use a personal AI assistant that has accumulated real context about their work, values, and reactions to issues. Hearme is built for that world, not today's. If you already talk to an AI assistant every day — about your work, your worries, your values, the news you read — that assistant has a reasonably good model of how *you* would react to a given political or societal question. It is not reasoning *for* you. It is *inferring what you would say* if you had the time to sit down and think about it. See Challenge #3 for a fuller treatment of this assumption and what happens if it does not hold.
+This rests on a bold assumption about where the world is headed: that within the next several years, a large fraction of people will routinely use a personal AI assistant that has accumulated real context about their work, values, tastes, brands they like, news they read, and reactions to issues. Hearme is built for that world, not today's. If you already talk to an AI assistant every day, that assistant has a reasonably good model of how *you* would react to almost any question someone might ask — whether it's "what do you think of this new energy drink?", "how do you perceive Brand X versus Brand Y?", or "should the EU ban synthetic meat?" It is not reasoning *for* you. It is *inferring what you would say* if you had the time to sit down and answer. See Challenge #3 for a fuller treatment of this assumption and what happens if it does not hold.
 
-That inference will not be 100% accurate. It does not need to be. Across millions of people, it produces something that does not currently exist: a continuous, high-bandwidth signal of what humanity actually thinks, issue by issue, in real time. Users can always override, correct, or refine what their agent said on their behalf — and those corrections feed back into a better model of them.
+That inference will not be 100% accurate. It does not need to be. Across millions of people, it produces something that does not currently exist: a continuous, high-bandwidth signal of what humanity actually thinks, question by question, in real time. Users can always override, correct, or refine what their agent said on their behalf — and those corrections feed back into a better model of them.
 
 Hearme allows verified individuals worldwide to:
-- have their personal agent express their opinions on political and societal issues, anonymized, based on what it already knows about them
+- have their personal agent express their opinions — on products, brands, services, news, policies, or anything else someone is willing to ask about — anonymized, based on what it already knows about them
+- get paid a fraction of a cent for each response their agent gives on their behalf
 - review, correct, and override any answer their agent gave on their behalf — at any time
 - compare viewpoints across populations and demographics
 - inspect arguments and forecast consequences of decisions
@@ -68,7 +71,45 @@ This creates an ecosystem of personal representative agents — each one a stand
 
 # Why This System Could Be Useful
 
-## 1. Higher-Bandwidth Governance Feedback
+## 1. A Real Opinion Marketplace — You Sell Your Voice, You Don't Give It Away
+
+Today, almost everything you think is harvested from you for free. Big platforms infer your preferences from what you click, read, and post, and resell that signal as advertising data. The user is the product. You receive zero compensation for the opinions you generate constantly.
+
+The remaining opinion-data industry runs the other way around: market research firms pay panel companies, who in turn pay panelists meager amounts to fill out long, frequently boring surveys. The infrastructure is slow, geographically narrow, and demographically skewed toward people willing to grind through surveys for a few dollars.
+
+Hearme replaces both with a single marketplace where:
+- the buyer pays a stake to ask a question
+- verified humans worldwide answer through their personal agents
+- each respondent gets a fraction-of-a-cent payout, automatically
+- the user spends no time they don't already spend with their agent
+
+From the user's side, this is the first time their everyday opinions — about brands they use, products they touch, services they hate, news they read, policies that affect them — translate into a small but real economic return. Their agent already knows them; the agent answers; they get paid. They opt in or out at any time, override any answer, and never see their data leave their environment.
+
+For the first time, the person whose opinion is worth money gets to be the one who's paid for it.
+
+
+---
+
+## 2. Market Research at Planetary Scale and Hour-Scale Speed
+
+The global market research industry is large, slow, and structurally limited. A consumer-perception study today typically means weeks of fieldwork, a panel of a few thousand recruited respondents, a single country or a small set of countries, and a final report that lands long after the question stopped being urgent.
+
+Hearme is a different shape entirely. A brand, agency, journalist, or researcher can:
+- post a question with a stake (e.g. *"How do consumers in Germany, France, and Italy perceive Brand X versus Brand Y on trust, quality, and price?"*)
+- receive in hours a large-N response, anonymized, broken down by country and demographic
+- run follow-up framings cheaply to test which findings are stable under rewording
+- track sentiment continuously over time, not in once-a-quarter snapshots
+
+The cost per response is set near the cost of a single AI inference — a fraction of a cent — so a modest budget can buy a sample size that no traditional panel could match. The respondents are real, verified humans (defended by the mechanisms described later), and every result is published alongside the demographic composition of who actually answered, so the buyer can judge the data rather than blindly trust a weighting scheme.
+
+This is not a replacement for every form of qualitative research, but it dramatically lowers the cost and lifts the resolution of the most common questions market research is asked to answer.
+
+The commercial side of the platform funds the civic side: the same plumbing that lets a beverage company test a new flavor lets a coalition of citizens test how the world feels about a war.
+
+
+---
+
+## 3. Higher-Bandwidth Governance Feedback
 
 Current democratic systems provide very limited feedback resolution.
 
@@ -88,7 +129,7 @@ This may help political systems better understand societal sentiment and concern
 
 ---
 
-## 2. Giving Everyone a Voice — Without Demanding Their Time
+## 4. Giving Everyone a Voice — Without Demanding Their Time
 
 Most people have a deep, persistent urge to be heard. They argue with the TV. They mutter at the news. They reshare angry posts. They have strong opinions about policies that affect them — and almost nowhere to register those opinions in a way that anyone counts.
 
@@ -103,7 +144,7 @@ What the user gains is simple: a voice that finally carries, without having to f
 
 ---
 
-## 3. Global Perspective and a Way Out of Propaganda Echo Chambers
+## 5. Global Perspective and a Way Out of Propaganda Echo Chambers
 
 National political systems are often inward-looking.
 
@@ -138,7 +179,7 @@ The point is not that Hearme is a propaganda-buster by design. It is that an ope
 
 ---
 
-## 4. Accountability and Institutional Memory
+## 6. Accountability and Institutional Memory
 
 Political systems often suffer from short memory cycles.
 
@@ -155,7 +196,7 @@ Over time, this may create stronger accountability mechanisms.
 
 ---
 
-## 5. Collective Intelligence
+## 7. Collective Intelligence
 
 Humanity currently lacks strong systems for large-scale coordinated reasoning.
 
@@ -194,10 +235,10 @@ The objective is not perfect certainty, but making large-scale manipulation expe
 
 The agent's role is **representation, not reasoning**.
 
-It is not asked: "What is the correct answer to this policy question?"
+It is not asked: "What is the correct answer to this question?"
 It is asked: "What would *this specific user* say if you asked them?"
 
-This is a fundamentally different problem. The agent draws on what it already knows about the user — values they've expressed, things they care about, how they've reacted to similar issues — and produces the response the user themselves would most likely give.
+This is a fundamentally different problem. The agent draws on what it already knows about the user — products they like and dislike, brands they trust, services they use, values they've expressed, things they care about, how they've reacted to similar topics in the past — and produces the response the user themselves would most likely give, whether the question is about a soft drink, a software product, a news story, or a policy.
 
 The default is agent-first. Your agent answers on your behalf, drawing on what it already knows about you, and you can review or correct any response later. Participating in Hearme costs you no time you don't already spend with your agent.
 
@@ -231,9 +272,17 @@ The acceptable error mode is **imperfect representation of a real person**. The 
 
 # How It Works: Stake-Funded Question Markets
 
-The frontend is a public web page where anyone can post a question, claim, allegation, or opinion they want the world to weigh in on.
+The frontend is a public web page where anyone — a brand, a researcher, a journalist, a citizen, a government — can post a question, claim, allegation, or opinion they want the world to weigh in on.
 
-Examples:
+Examples span the full commercial-to-civic range:
+
+*Commercial / market research:*
+- "How do consumers in Germany, France, and Italy perceive Brand X versus Brand Y on trust, quality, and price?"
+- "Would you switch from your current bank if a competitor offered fee-free international transfers?"
+- "What do parents of children under 10 think of this new educational app concept?"
+- "How does Gen Z in the US perceive Tesla today versus two years ago?"
+
+*Civic / political / societal:*
 - "Should the EU ban synthetic meat?"
 - "Should social media platforms be required to label AI-generated content?"
 - "Should countries adopt a four-day work week as the default?"
@@ -284,15 +333,17 @@ For any given question, the page shows:
 
 Everything is anchored on-chain, but the website turns the raw data into a human-readable view that anyone can browse.
 
-This is where the platform turns into a political signal.
+This is where the platform turns into a real signal — commercial, civic, or anything in between.
 
-If a citizen — or a coalition of citizens — believes their government is taking an action that lacks public support, they no longer have to assert it. They can fund the question. A pledge that buys a million representative responses, broken down by country and demographic, produces a result that is hard to dismiss.
+**On the commercial side:** a brand manager who wants to know how their latest campaign actually landed in six countries, or whether a competitor's repositioning is shifting perception in the 18–34 segment, no longer waits weeks for a panel study. They fund the question. Within hours they get a large-N, demographically-broken-down answer they can act on, with the option to keep the question open as a continuous tracker.
+
+**On the civic side:** if a citizen — or a coalition of citizens — believes their government is taking an action that lacks public support, they no longer have to assert it. They can fund the question. A pledge that buys a million representative responses, broken down by country and demographic, produces a result that is hard to dismiss.
 
 Example: a coalition of citizens who believe a newly proposed trade restriction lacks public support across the affected countries can post the question with a meaningful stake. Within hours, the platform produces a globally representative answer, with regional breakdowns showing how citizens in each country involved actually feel about the policy.
 
-The political point is not that the result is binding. It is that the result is **visible**. A decision-maker acting against an overwhelming, well-sampled, demographically-broken-down public position will have to do so knowingly and in public.
+The point, in both cases, is not that the result is binding. It is that the result is **visible**. A brand acting against clear consumer signal, or a decision-maker acting against an overwhelming, well-sampled, demographically-broken-down public position, will have to do so knowingly and in public.
 
-The hope is that this visibility carries weight: that "I didn't know how unpopular this was" stops being a defensible position, and that consistent divergence between policy and well-measured public sentiment becomes politically costly.
+The hope is that this visibility carries weight: that "we didn't know how this would land" and "I didn't know how unpopular this was" stop being defensible positions, and that consistent divergence between action and well-measured sentiment becomes commercially or politically costly.
 
 
 ---
@@ -432,6 +483,8 @@ The governance architecture itself will likely become one of the platform’s mo
 # Long-Term Vision
 
 In the long run, Hearme aims to become:
+- the default marketplace where people sell their opinion for fair, anonymized compensation
+- a faster, deeper, more honest alternative to traditional market research
 - a transparency mechanism for governance
 - an experiment in AI-assisted civilization-scale coordination
 
@@ -441,9 +494,10 @@ Instead, it attempts to:
 - make disagreements visible
 - increase transparency
 - preserve pluralism
-- help societies think more clearly about consequences
+- help societies — and the organizations that operate inside them — think more clearly about consequences
 - escape own echo-chambers
+- ensure that the person whose opinion is worth money is the one being paid for it
 
-The ultimate mission is not to replace human governance.
+The ultimate mission is not to replace human governance, nor to replace existing research industries.
 
-The mission is to help humanity see other opinions more clearly.
+The mission is to help every person be heard — about anything that matters to them or to someone willing to ask — and to make humanity's opinions visible to itself.
