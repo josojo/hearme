@@ -1,6 +1,10 @@
 # Hearme Vision
 
-> The name **Hearme** captures the core promise: giving every person a real-time anoymized voice that governments and the public can actually hear.
+> The name **Hearme** captures the core promise: giving every person a real-time anonymized voice that governments and the public can actually hear.
+
+## In One Paragraph
+
+Anyone can post a political or societal question and fund it with a small stake (paid by card, no crypto knowledge required). The question is broadcast to verified humans worldwide, and their personal AI agents — the ones that already know them — answer on their behalf. Responses are aggregated, anonymized, and published with full demographic breakdowns of who actually responded. Each participant receives a fraction-of-a-cent payout for the inference cost. Users can review, correct, or override any answer their agent gave for them. The result is a continuous, large-N global opinion signal that did not previously exist at any scale.
 
 ## Introduction
 
@@ -10,16 +14,11 @@ Political leaders make decisions affecting millions or billions of people, yet f
 
 Most people will never have the time, attention, or platform to express an opinion on every policy decision that affects them — even when they care. Today, someone who strongly disagrees with a government action has almost no way to register that disagreement in real time. They lack a channel. They lack a platform. So the signal is lost, and decision-makers operate with very thin information about what their populations actually think.
 
-While this signal might not be perfect, its driven by emotions, might be influenced, people might be misinformed, it is still a valuable signal in many cases. Especially if it categorized by age, geographics etc, it might be interesting to see which people support which options. And espically it might be interesting to see people opinion worldwide and get a global feedback on politics.
+This signal will not be perfect — it is driven by emotion, it can be influenced, and people are sometimes misinformed. It is still a valuable signal in many cases, especially once it is broken down by age, geography, and other demographics so we can see which groups support which options. A global view of public opinion on politics, in particular, does not currently exist at any scale, and is worth building even in imperfect form.
 
 Hearme is an attempt to create a new kind of global public feedback platform with all its faults and strengths.
 
-Hearme, is not a 
-Not a world government.
-Not a replacement for democracy.
-Not a coercive institution.
-
-just a platform for people signallying their understanding and preferences.
+Hearme is not a world government, not a replacement for democracy, and not a coercive institution. It is just a platform for people to signal their understanding and preferences.
 
 It will hopefully:
 
@@ -53,7 +52,7 @@ The platform is designed around pluralism and data sovereignty: there is no sing
 **Hearme is not an app you install. Hearme is an add-on for the agent OS you already run.**
 
 Users bring:
-- their own agent OS — Openclaw and Hermes are first-class targets, with integrations also planned for ChatGPT, Gemini, and other major assistants
+- their own agent OS — self-hosted, open-source agent runtimes (such as Openclaw and Hermes) are first-class targets, with integrations also planned for Claude, ChatGPT, Gemini, and other major assistants
 - their own values and lived context, accumulated through normal use of their agent over months and years
 - their own trusted information sources
 - their own data, which never leaves their environment
@@ -447,4 +446,4 @@ Instead, it attempts to:
 
 The ultimate mission is not to replace human governance.
 
-The mission is to help humanity see other opinion better.
+The mission is to help humanity see other opinions more clearly.
