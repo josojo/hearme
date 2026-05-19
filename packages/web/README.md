@@ -4,8 +4,8 @@ The Next.js App Router frontend for Hearme. See `/ARCHITECTURE.md` §4 for the
 authoritative spec; this README only covers operational concerns.
 
 This package is **the only writer of `questions` and `askers`**, and reads
-everything else (`envelopes`, `aggregates`, `revocations`) for display.
-Envelope writes belong to the broker (`packages/broker/`).
+public aggregate results for display. Raw envelopes and revocations remain
+broker-private.
 
 ## Layout
 
@@ -72,12 +72,13 @@ Open <http://localhost:3000>.
 `DATABASE_URL` should point at a role that has:
 
 - `SELECT, INSERT` on `questions` and `askers`
-- `SELECT` on `envelopes`, `aggregates`, `revocations`
+- `SELECT` on `aggregates`
 
 The dev compose stack provisions a `hearme_web` role with exactly these grants
 (see `db/init/02-roles.sql`). The web package only inserts into `questions`
-and `askers` from the `createQuestion` server action; envelope writes are
-the broker's job and are explicitly **denied** to the web role by Postgres.
+and `askers` from the `createQuestion` server action; raw envelopes,
+revocations, and aggregate writes are the broker's job and are explicitly
+**denied** to the web role by Postgres.
 
 We can't enforce role grants from inside this package — the role must be
 granted by the DB admin (or in dev, by the compose init script). Code review
@@ -97,8 +98,8 @@ We currently cover:
   + missing field + past `closes_at` + oversize text) and DB-insertion
   shape via a fake Drizzle handle.
 - `tests/question-detail.test.tsx` — `<QuestionDetail/>` renders the
-  predicate breakdown that comes from `aggregates.by_predicate`, plus
-  individual envelopes with their disclosed predicates.
+  predicate breakdown that comes from `aggregates.by_predicate` without
+  exposing raw envelopes.
 
 ## Not yet real (v0 stubs)
 
@@ -113,8 +114,8 @@ that touch this package:
 - **Polling instead of websockets.** `/q/[id]` and `/` both use Next.js
   `export const revalidate = 10` to refresh server-rendered data every ~10s.
   WebSocket / SSE push lands in v0.2.
-- **No live revocation list rendering.** The `revocations` table exists and
-  is readable; the UI doesn't surface revocation status per envelope yet.
+- **No live revocation list rendering.** The `revocations` table exists for
+  broker-side verification; the public UI does not read or render it.
 
 Anything in this package that is a stub for a v0.2 capability is tagged with
 a `// STUB:` comment in the source.
@@ -126,6 +127,7 @@ feature sprint.)
 
 - It must not write to `envelopes` or `aggregates`. Those are the broker's
   tables.
+- It must not read or render raw envelopes; public pages consume aggregates.
 - It must not talk to agents over HTTP. The frontend's only network peer is
   Postgres.
 - It must not implement auth, payments, or asker accounts. Those are

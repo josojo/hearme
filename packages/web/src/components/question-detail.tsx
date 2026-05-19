@@ -6,13 +6,6 @@ import { AggregateChart, type ByPredicate } from "./aggregate-chart";
 import { countryFlag } from "@/lib/flags";
 import { CONTINENT_NAMES, COUNTRY_NAMES, type Continent } from "@/lib/geo-data";
 
-export type EnvelopeRow = {
-  uniqueIdentifier: string;
-  answer: string;
-  disclosedPredicates: Record<string, string> | null;
-  submittedAt: Date;
-};
-
 export type QuestionDetailProps = {
   question: {
     id: string;
@@ -27,18 +20,10 @@ export type QuestionDetailProps = {
   };
   totalAnswers: number;
   byPredicate: ByPredicate;
-  envelopes: EnvelopeRow[];
-  page: number;
-  pageSize: number;
-  hasNextPage: boolean;
 };
 
 function fmtDate(d: Date): string {
   return d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
-}
-
-function shortId(id: string): string {
-  return id.length <= 10 ? id : id.slice(0, 8) + "…";
 }
 
 function ScopePill(props: {
@@ -74,8 +59,7 @@ function ScopePill(props: {
 }
 
 export function QuestionDetail(props: QuestionDetailProps) {
-  const { question, totalAnswers, byPredicate, envelopes, page, pageSize, hasNextPage } =
-    props;
+  const { question, totalAnswers, byPredicate } = props;
 
   return (
     <article className="space-y-10">
@@ -128,80 +112,6 @@ export function QuestionDetail(props: QuestionDetailProps) {
         </div>
       </section>
 
-      <section>
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-          Answers
-        </h2>
-        {envelopes.length === 0 ? (
-          <p className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white/60 p-6 text-sm text-slate-600">
-            No envelopes recorded yet.
-          </p>
-        ) : (
-          <ul className="mt-4 space-y-3">
-            {envelopes.map((e) => (
-              <li
-                key={`${e.uniqueIdentifier}-${e.submittedAt.toISOString()}`}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-              >
-                <p className="whitespace-pre-wrap text-sm text-slate-900">
-                  {e.answer}
-                </p>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  <span className="font-mono text-slate-400">
-                    user {shortId(e.uniqueIdentifier)}
-                  </span>
-                  <span className="text-slate-300">·</span>
-                  <span>{fmtDate(e.submittedAt)}</span>
-                  {e.disclosedPredicates &&
-                  Object.keys(e.disclosedPredicates).length > 0 ? (
-                    <>
-                      <span className="text-slate-300">·</span>
-                      <div className="flex flex-wrap gap-1">
-                        {Object.entries(e.disclosedPredicates).map(([k, v]) => (
-                          <span
-                            key={k}
-                            className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700"
-                          >
-                            {k}: {String(v)}
-                          </span>
-                        ))}
-                      </div>
-                    </>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {(page > 1 || hasNextPage) && (
-          <nav className="mt-5 flex items-center justify-between text-sm">
-            {page > 1 ? (
-              <a
-                href={`?page=${page - 1}`}
-                className="text-slate-700 underline-offset-4 hover:text-violet-700 hover:underline"
-              >
-                ← Newer
-              </a>
-            ) : (
-              <span />
-            )}
-            <span className="text-slate-500">
-              page {page} · {pageSize}/page
-            </span>
-            {hasNextPage ? (
-              <a
-                href={`?page=${page + 1}`}
-                className="text-slate-700 underline-offset-4 hover:text-violet-700 hover:underline"
-              >
-                Older →
-              </a>
-            ) : (
-              <span />
-            )}
-          </nav>
-        )}
-      </section>
     </article>
   );
 }

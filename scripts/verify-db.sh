@@ -2,7 +2,7 @@
 # Verifies the shared postgres came up correctly:
 #   - all five tables present (ARCHITECTURE.md §3)
 #   - both writer roles created (§4)
-#   - grant boundaries enforced (web cannot write envelopes, broker cannot write questions)
+#   - grant boundaries enforced (web cannot read/write envelopes, broker cannot write questions)
 #   - composite PK on envelopes rejects duplicate (question_id, unique_identifier) — §3 Sybil claim
 #
 # Assumes the postgres container from docker-compose is running and healthy.
@@ -35,6 +35,12 @@ if web "INSERT INTO envelopes(question_id, unique_identifier, answer, disclosed_
   fail "hearme_web should be denied INSERT on envelopes"
 fi
 pass "hearme_web denied INSERT envelopes"
+
+# 3b. hearme_web blocked from raw envelopes reads (public pages use aggregates).
+if web "SELECT COUNT(*) FROM envelopes;" 2>/dev/null; then
+  fail "hearme_web should be denied SELECT on envelopes"
+fi
+pass "hearme_web denied SELECT envelopes"
 
 # 4. hearme_broker blocked from questions (boundary check).
 if broker "INSERT INTO questions(text, closes_at) VALUES ('x', now());" 2>/dev/null; then

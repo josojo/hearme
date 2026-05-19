@@ -63,7 +63,7 @@ The user's phone (running the ZKPassport app) is touched at exactly three moment
           ▼                                  ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  hearme-web  (Next.js, App Router, server components)       │
-│  - reads: questions, envelopes, aggregates                  │
+│  - reads: questions, aggregates                             │
 │  - writes: questions (only)                                 │
 └──────────────────────────┬──────────────────────────────────┘
                            │ SQL (read mostly)
@@ -73,7 +73,7 @@ The user's phone (running the ZKPassport app) is touched at exactly three moment
 │  questions │ envelopes │ aggregates │ askers │ revocations  │
 └────────────▲──────────────────────────────▲─────────────────┘
              │ write envelopes              │ poll for open questions
-             │ recompute aggregates         │
+             │ increment aggregates         │
 ┌────────────┴───────┐               ┌──────┴─────────────────┐
 │  hearme-broker     │   HTTP/JSON   │  hearme-skill          │
 │  (Python/FastAPI)  ├──────────────►│  (Python, in Hermes)   │
@@ -238,8 +238,9 @@ parse (pydantic)
   → recompute expected delegation_hash and compare
   → verify agent_signature over H(question_id, answer, nonce, delegation_hash) using token.agent_key.public
   → check question_id exists, status='open', closes_at > now()
+  → check signed predicates are eligible for the question scope
   → INSERT envelope (UNIQUE constraint rejects duplicates)
-  → recompute aggregates row for question_id
+  → increment aggregates row for question_id
 ```
 
 If any step fails, the envelope is rejected with a specific reason code; nothing is written. Reasons are logged but **not** returned in detail to the agent in production (avoid an oracle); v0 returns detailed reasons for debugging.
@@ -269,7 +270,8 @@ hearme-broker/
 │   ├── db/
 │   │   ├── client.py             # asyncpg pool
 │   │   └── queries.py
-│   ├── aggregates.py             # recompute on each insert
+│   ├── aggregates.py             # aggregate helpers
+│   ├── eligibility.py            # signed-predicate scope checks
 │   └── config.py
 └── tests/
     ├── test_verify_delegation.py
@@ -561,13 +563,13 @@ Each package has its own test suite; one cross-cutting end-to-end suite at the r
 
 ### web
 - Server action `createQuestion` — happy path + validation.
-- Detail page renders aggregates correctly given seeded envelopes.
+- Detail page renders aggregate results without exposing raw envelopes.
 
 ### broker — the highest-stakes suite
 - **Verify delegation** — happy path, expired token, bad phone signature, revoked token.
 - **Verify envelope** — happy path, bad agent signature, swapped `question_id`, swapped `answer`, swapped `nonce`, swapped `delegation_hash`. Each swap must reject.
 - **Uniqueness** — two envelopes from the same `unique_identifier` for the same `question_id` → second rejects via DB constraint. (Test against a real Postgres in CI.)
-- **Aggregate recompute** — given N envelopes, the `by_predicate` JSON matches a hand-computed expectation.
+- **Aggregate increment** — accepted envelopes update `total_answers` and `by_predicate` without scanning all prior envelopes.
 
 ### skill
 - **Policy and ledger** — pure / deterministic unit tests.

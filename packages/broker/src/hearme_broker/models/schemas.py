@@ -80,6 +80,7 @@ class RejectionReason(str, Enum):
     QUESTION_NOT_OPEN = "question_not_open"
     QUESTION_CLOSED = "question_closed"
     NONCE_MISMATCH = "nonce_mismatch"
+    SCOPE_INELIGIBLE = "scope_ineligible"
     DUPLICATE = "duplicate"
     INTERNAL_ERROR = "internal_error"
 

@@ -52,10 +52,13 @@ Per envelope, in order (ARCHITECTURE.md §5):
    using `token.agent_key`.
 7. Check `question_id` exists, `status='open'`, `closes_at > now()`, and the
    envelope's `nonce` equals the row's `nonce`.
-8. INSERT envelope. The composite primary key
+8. Check the token's signed demographic predicates are eligible for the
+   question scope (`worldwide`, matching `continent`/legacy `region`, or
+   matching `country`).
+9. INSERT envelope. The composite primary key
    `(question_id, unique_identifier)` is the DB-level Sybil gate; duplicates
    bounce here.
-9. Recompute the `aggregates` row for that `question_id` (count +
+10. Increment the `aggregates` row for that `question_id` (count +
    `by_predicate` JSON), inside the same transaction as the INSERT.
 
 A failure at any step rejects the envelope. Detailed reasons are returned to
@@ -119,14 +122,14 @@ cd packages/broker
 pip install -e ".[dev]"
 
 # Pure / in-process suites — no Docker required.
-pytest tests/test_canonical_json.py tests/test_verify_delegation.py tests/test_verify_envelope.py tests/test_aggregate_recompute.py::test_compute_by_predicate_hand_computation tests/test_aggregate_recompute.py::test_compute_by_predicate_empty tests/test_aggregate_recompute.py::test_compute_by_predicate_handles_missing_field
+pytest tests/test_canonical_json.py tests/test_verify_delegation.py tests/test_verify_envelope.py tests/test_eligibility.py tests/test_aggregate_recompute.py::test_compute_by_predicate_hand_computation tests/test_aggregate_recompute.py::test_compute_by_predicate_empty tests/test_aggregate_recompute.py::test_compute_by_predicate_handles_missing_field
 
 # Full suite — requires Docker for testcontainers-managed Postgres.
 pytest
 ```
 
 The Postgres-dependent tests (`test_uniqueness.py`,
-`test_aggregate_recompute.py::test_recompute_against_real_pg`) spin up an
+`test_aggregate_recompute.py::test_increment_aggregate_against_real_pg`) spin up an
 ephemeral Postgres 16 via [`testcontainers`](https://testcontainers-python.readthedocs.io/)
 and apply the canonical schema from `packages/web/drizzle/0000_init.sql`.
 If Docker isn't available they skip cleanly.
@@ -160,7 +163,8 @@ packages/broker/
 │   ├── __init__.py
 │   ├── main.py                   # FastAPI app factory
 │   ├── config.py                 # env-driven settings
-│   ├── aggregates.py             # recompute on each insert
+│   ├── aggregates.py             # pure aggregate helpers
+│   ├── eligibility.py            # signed-predicate scope eligibility
 │   ├── routes/
 │   │   ├── questions.py          # GET /v1/questions/open
 │   │   └── envelopes.py          # POST /v1/envelopes
