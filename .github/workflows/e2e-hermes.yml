@@ -22,6 +22,10 @@ jobs:
   e2e:
     name: hermes-skill end-to-end
     runs-on: ubuntu-latest
+    # The OpenRouter key lives under the `staging` GitHub environment, not as
+    # a repo-level secret. Without this declaration, ${{ secrets.OPEN_ROUTER_API_KEY }}
+    # resolves to "" and the job skips.
+    environment: staging
     # Skip on PRs from forks (no secret access). Manual runs and pushes proceed.
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
 
