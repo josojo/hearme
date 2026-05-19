@@ -73,6 +73,44 @@ async def is_revoked(conn: asyncpg.Connection, delegation_hash_hex: str) -> bool
     return row is not None
 
 
+# ----- nullifiers --------------------------------------------------------
+
+
+async def get_bound_agent_key(
+    conn: asyncpg.Connection, nullifier: str
+) -> str | None:
+    """Return the agent_key currently bound to ``nullifier`` (None if unbound)."""
+    row = await conn.fetchrow(
+        "SELECT agent_key FROM nullifiers WHERE nullifier = $1",
+        nullifier,
+    )
+    return row["agent_key"] if row else None
+
+
+async def upsert_nullifier_binding(
+    conn: asyncpg.Connection, *, nullifier: str, agent_key: str
+) -> None:
+    """Record a (nullifier, agent_key) binding; refresh ``last_seen_at`` on
+    repeat use with the same agent_key.
+
+    Policy on conflicting agent_keys is enforced by ``routes/envelopes.py``
+    *before* this is called — see ``IDENTITY_ALREADY_BOUND``. This UPSERT is
+    intentionally a no-op on agent_key mismatch (``WHERE`` guard) so a stray
+    call cannot silently overwrite a binding.
+    """
+    await conn.execute(
+        """
+        INSERT INTO nullifiers (nullifier, agent_key, first_seen_at, last_seen_at)
+        VALUES ($1, $2, now(), now())
+        ON CONFLICT (nullifier) DO UPDATE
+        SET last_seen_at = now()
+        WHERE nullifiers.agent_key = EXCLUDED.agent_key
+        """,
+        nullifier,
+        agent_key,
+    )
+
+
 # ----- envelopes ---------------------------------------------------------
 
 
