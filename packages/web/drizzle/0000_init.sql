@@ -24,8 +24,31 @@ CREATE TABLE questions (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   closes_at   TIMESTAMPTZ NOT NULL,
   status      TEXT NOT NULL DEFAULT 'open',
-  CONSTRAINT questions_status_chk CHECK (status IN ('open', 'closed'))
+  -- Geographic scope of the question. 'worldwide' is the broadest;
+  -- 'continent' restricts to a region (continent column required);
+  -- 'country' restricts to a single country (country column required,
+  -- and continent is auto-set from it).
+  scope       TEXT NOT NULL DEFAULT 'worldwide',
+  -- ISO 3166-1 alpha-2 (e.g. 'US', 'DE', 'JP'). NULL when scope != 'country'.
+  country     TEXT,
+  -- Two-letter continent code: AF, AN, AS, EU, NA, OC, SA.
+  -- Required when scope IN ('continent','country'); NULL for 'worldwide'.
+  continent   TEXT,
+  CONSTRAINT questions_status_chk CHECK (status IN ('open', 'closed')),
+  CONSTRAINT questions_scope_chk  CHECK (scope IN ('worldwide','continent','country')),
+  CONSTRAINT questions_continent_chk CHECK (
+    continent IS NULL OR continent IN ('AF','AN','AS','EU','NA','OC','SA')
+  ),
+  CONSTRAINT questions_scope_geo_chk CHECK (
+    (scope = 'worldwide' AND country IS NULL AND continent IS NULL)
+    OR (scope = 'continent' AND country IS NULL AND continent IS NOT NULL)
+    OR (scope = 'country' AND country IS NOT NULL AND continent IS NOT NULL)
+  )
 );
+
+CREATE INDEX questions_scope_idx     ON questions(scope);
+CREATE INDEX questions_country_idx   ON questions(country);
+CREATE INDEX questions_continent_idx ON questions(continent);
 
 CREATE TABLE envelopes (
   question_id          UUID NOT NULL REFERENCES questions(id),

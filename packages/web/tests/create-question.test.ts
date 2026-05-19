@@ -21,18 +21,76 @@ import {
 describe("validateCreateQuestion", () => {
   const futureDate = new Date(Date.now() + 86_400_000);
 
-  it("accepts a valid input", () => {
+  it("accepts a valid worldwide input", () => {
     const r = validateCreateQuestion({
       displayName: "Alice",
       text: "Should we ship?",
       topic: "engineering",
       closesAt: futureDate,
+      scope: "worldwide",
     });
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.value.displayName).toBe("Alice");
       expect(r.value.topic).toBe("engineering");
+      expect(r.value.scope).toBe("worldwide");
+      expect(r.value.country).toBeNull();
+      expect(r.value.continent).toBeNull();
     }
+  });
+
+  it("accepts a country-scoped input and derives continent", () => {
+    const r = validateCreateQuestion({
+      displayName: "Alice",
+      text: "Should we ship?",
+      closesAt: futureDate,
+      scope: "country",
+      country: "DE",
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value.scope).toBe("country");
+      expect(r.value.country).toBe("DE");
+      expect(r.value.continent).toBe("EU");
+    }
+  });
+
+  it("accepts a continent-scoped input", () => {
+    const r = validateCreateQuestion({
+      displayName: "Alice",
+      text: "Should we ship?",
+      closesAt: futureDate,
+      scope: "continent",
+      continent: "AS",
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value.scope).toBe("continent");
+      expect(r.value.continent).toBe("AS");
+      expect(r.value.country).toBeNull();
+    }
+  });
+
+  it("rejects continent scope without continent", () => {
+    const r = validateCreateQuestion({
+      displayName: "Alice",
+      text: "Hi?",
+      closesAt: futureDate,
+      scope: "continent",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.continent).toBeTruthy();
+  });
+
+  it("rejects country scope without country", () => {
+    const r = validateCreateQuestion({
+      displayName: "Alice",
+      text: "Hi?",
+      closesAt: futureDate,
+      scope: "country",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.country).toBeTruthy();
   });
 
   it("trims whitespace", () => {
@@ -41,12 +99,12 @@ describe("validateCreateQuestion", () => {
       text: "  hello?  ",
       topic: "   ",
       closesAt: futureDate,
+      scope: "worldwide",
     });
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.value.displayName).toBe("Alice");
       expect(r.value.text).toBe("hello?");
-      // Empty topic after trim becomes null.
       expect(r.value.topic).toBeNull();
     }
   });
@@ -56,6 +114,7 @@ describe("validateCreateQuestion", () => {
       displayName: "",
       text: "Hi?",
       closesAt: futureDate,
+      scope: "worldwide",
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors.displayName).toBeTruthy();
@@ -66,6 +125,7 @@ describe("validateCreateQuestion", () => {
       displayName: "Alice",
       text: "   ",
       closesAt: futureDate,
+      scope: "worldwide",
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors.text).toBeTruthy();
@@ -76,6 +136,7 @@ describe("validateCreateQuestion", () => {
       displayName: "Alice",
       text: "Hi?",
       closesAt: new Date(Date.now() - 60_000),
+      scope: "worldwide",
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors.closesAt).toBeTruthy();
@@ -86,6 +147,7 @@ describe("validateCreateQuestion", () => {
       displayName: "Alice",
       text: "a".repeat(2001),
       closesAt: futureDate,
+      scope: "worldwide",
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors.text).toBeTruthy();
@@ -138,6 +200,9 @@ describe("createQuestion", () => {
     text: "Should we ship today?",
     topic: "engineering",
     closesAt: new Date(Date.now() + 86_400_000),
+    scope: "worldwide",
+    country: null,
+    continent: null,
   };
 
   it("creates a fresh asker display row, then inserts the question", async () => {

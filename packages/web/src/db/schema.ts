@@ -38,11 +38,18 @@ export const questions = pgTable(
       .defaultNow(),
     closesAt: timestamp("closes_at", { withTimezone: true }).notNull(),
     status: text("status").notNull().default("open"),
+    scope: text("scope").notNull().default("worldwide"),
+    country: text("country"),
+    continent: text("continent"),
   },
   (t) => ({
     statusChk: check(
       "questions_status_chk",
       sql`${t.status} IN ('open', 'closed')`,
+    ),
+    scopeChk: check(
+      "questions_scope_chk",
+      sql`${t.scope} IN ('worldwide','continent','country')`,
     ),
   }),
 );

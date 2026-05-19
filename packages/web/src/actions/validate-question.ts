@@ -3,16 +3,25 @@
 // "use server" rule that every export of a server-action module must be
 // an async function.
 
+import { COUNTRY_TO_CONTINENT, type Continent } from "@/lib/geo-data";
+
+export type Scope = "worldwide" | "continent" | "country";
+
 export type CreateQuestionInput = {
   displayName: string;
   text: string;
   topic?: string | null;
   closesAt: Date;
+  scope: Scope;
+  country: string | null;
+  continent: Continent | null;
 };
 
 const MAX_TEXT_LEN = 2000;
 const MAX_TOPIC_LEN = 80;
 const MAX_NAME_LEN = 80;
+
+const CONTINENTS: ReadonlyArray<Continent> = ["AF","AN","AS","EU","NA","OC","SA"];
 
 export function validateCreateQuestion(
   input: Partial<CreateQuestionInput>,
@@ -48,6 +57,38 @@ export function validateCreateQuestion(
     errors.closesAt = "Close time must be in the future.";
   }
 
+  const scopeRaw = (input.scope ?? "worldwide") as Scope;
+  let scope: Scope = "worldwide";
+  let country: string | null = null;
+  let continent: Continent | null = null;
+  if (scopeRaw === "worldwide" || scopeRaw === "continent" || scopeRaw === "country") {
+    scope = scopeRaw;
+  } else {
+    errors.scope = "Invalid scope.";
+  }
+
+  if (scope === "continent") {
+    const c = (input.continent ?? "")?.toString().toUpperCase() as Continent;
+    if (!c || !CONTINENTS.includes(c)) {
+      errors.continent = "Please pick a continent.";
+    } else {
+      continent = c;
+    }
+  } else if (scope === "country") {
+    const cc = (input.country ?? "")?.toString().toUpperCase();
+    if (!cc || cc.length !== 2) {
+      errors.country = "Please pick a country.";
+    } else {
+      const derived = COUNTRY_TO_CONTINENT[cc];
+      if (!derived) {
+        errors.country = "Unknown country code.";
+      } else {
+        country = cc;
+        continent = derived;
+      }
+    }
+  }
+
   if (Object.keys(errors).length > 0) {
     return { ok: false, errors };
   }
@@ -59,6 +100,9 @@ export function validateCreateQuestion(
       text,
       topic,
       closesAt: closesAt as Date,
+      scope,
+      country,
+      continent,
     },
   };
 }

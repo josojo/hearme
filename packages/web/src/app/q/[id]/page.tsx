@@ -93,6 +93,9 @@ export default async function QuestionPage({ params, searchParams }: PageProps) 
         text: question.text,
         topic: question.topic,
         status: effectiveStatus,
+        scope: question.scope as "worldwide" | "continent" | "country",
+        country: question.country,
+        continent: question.continent,
         createdAt: question.createdAt,
         closesAt: question.closesAt,
       }}
