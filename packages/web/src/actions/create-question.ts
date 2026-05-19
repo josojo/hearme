@@ -49,6 +49,9 @@ export async function createQuestion(
       text: input.text,
       topic: input.topic ?? null,
       closesAt: input.closesAt,
+      scope: input.scope,
+      country: input.country,
+      continent: input.continent,
       // status defaults to 'open'; nonce defaults to a random base64 blob.
     })
     .returning({ id: questions.id });
@@ -72,11 +75,20 @@ export async function createQuestionAction(
       ? new Date(closesAtRaw)
       : null;
 
+  const scopeRaw = (formData.get("scope") ?? "worldwide").toString();
+  const countryRaw = (formData.get("country") ?? "").toString();
+  const continentRaw = (formData.get("continent") ?? "").toString();
+
   const parsed = validateCreateQuestion({
     displayName: (formData.get("displayName") ?? "").toString(),
     text: (formData.get("text") ?? "").toString(),
     topic: (formData.get("topic") ?? "").toString(),
     closesAt: parsedDate ?? undefined,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    scope: scopeRaw as any,
+    country: countryRaw,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    continent: continentRaw as any,
   });
 
   if (!parsed.ok) {

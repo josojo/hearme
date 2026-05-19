@@ -35,7 +35,7 @@ describe("QuestionDetail rendering", () => {
     expect(
       screen.getByText("Should the EU adopt policy X?"),
     ).toBeTruthy();
-    expect(screen.getByText("politics")).toBeTruthy();
+    expect(screen.getByText("#politics")).toBeTruthy();
   });
 
   it("renders the predicate breakdown from aggregates.by_predicate", () => {
