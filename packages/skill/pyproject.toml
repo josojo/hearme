@@ -26,9 +26,21 @@ dev = [
     "pytest-asyncio>=0.23",
     "pytest-snapshot>=0.9",
     "ruff>=0.4",
+    # Used by tests/test_e2e_hermes.py to spin up an ephemeral Postgres
+    # locally. Skipped at runtime if Docker isn't available.
+    "testcontainers[postgres]>=4.0",
+    "asyncpg>=0.29",
 ]
 # Real QR rendering is optional; the v0 onboarding flow falls back to ASCII.
 qr = ["qrcode>=7.4"]
+# Optional: real Hermes Agent runtime (Nous Research, MIT). Without this
+# extra the skill uses FakeLLMClient + Mem0StubProvider. With it, the skill
+# can drive a real Hermes instance and answer questions from the user's
+# actual conversation memory. The e2e suite installs this.
+hermes = [
+    "hermes-agent>=0.14",
+    "python-dotenv>=1.0",
+]
 
 [project.entry-points."hermes.skills"]
 hearme = "hearme_skill.skill:entrypoint"
@@ -44,6 +56,9 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 filterwarnings = [
     "ignore::DeprecationWarning",
+]
+markers = [
+    "slow: integration tests that spin up real services (Postgres, broker, Hermes).",
 ]
 
 [tool.ruff]

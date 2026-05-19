@@ -207,6 +207,46 @@ def _cmd_accept_mock(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_hermes_chat(args: argparse.Namespace) -> int:
+    """Drive a one-shot conversation with the local Hermes agent.
+
+    Used by the e2e test (and humans) to seed Hermes memory before
+    submitting questions. Requires the ``[hermes]`` extra and an
+    ``OPEN_ROUTER_API_KEY`` / ``OPENROUTER_API_KEY`` in the environment.
+
+    Memory persistence is whatever Hermes itself does — this skill does
+    not modify the user's profile, it just chats. The Hearme ledger is
+    untouched.
+    """
+
+    try:
+        from .llm.hermes_client import HermesLLMClient
+    except ImportError as exc:
+        print(f"hermes-agent not installed: {exc}", file=sys.stderr)
+        return 2
+
+    message = args.message
+    if message == "-":
+        message = sys.stdin.read().strip()
+    if not message:
+        print("empty message", file=sys.stderr)
+        return 2
+
+    client = HermesLLMClient(model=args.model) if args.model else HermesLLMClient()
+    try:
+        reply = client.chat(message)
+    except ImportError as exc:
+        # The AIAgent import is lazy, so missing-hermes surfaces here.
+        print(
+            f"hermes-agent not installed: {exc}\n"
+            "Install it: pip install -e '.[hermes]' (from packages/skill).",
+            file=sys.stderr,
+        )
+        return 2
+    print(reply)
+    return 0
+
+
 def cli() -> int:
     parser = argparse.ArgumentParser(prog="hearme-skill")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -221,6 +261,18 @@ def cli() -> int:
     )
     p_accept.add_argument("token_path", help="Path to token JSON, or '-' for stdin")
     p_accept.set_defaults(func=_cmd_accept_mock)
+
+    p_chat = sub.add_parser(
+        "hermes-chat",
+        help="Chat once with the local Hermes agent (seeds memory for the e2e flow)",
+    )
+    p_chat.add_argument("message", help="Message to send. Use '-' to read stdin.")
+    p_chat.add_argument(
+        "--model",
+        default=None,
+        help="Override the Hermes model (default: $HEARME_HERMES_MODEL or a cheap OpenRouter model).",
+    )
+    p_chat.set_defaults(func=_cmd_hermes_chat)
 
     args = parser.parse_args()
     return args.func(args)

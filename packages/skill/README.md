@@ -149,6 +149,71 @@ Mandatory tests (per ARCHITECTURE.md §12, all in `tests/`):
 Per §12, **no live LLM calls in CI**. All Answerer tests use the
 deterministic `FakeLLMClient` in `llm/client.py`.
 
+## Real Hermes integration
+
+The skill ships two host modes (see `dev_runner.py`):
+
+* **Stub mode** (default): `FakeLLMClient` + `Mem0StubProvider`. No
+  network calls. This is what `docker compose up` runs by default and
+  what CI tests by default (per ARCHITECTURE.md §12).
+* **Hermes mode** (`HEARME_USE_HERMES=1`): instantiates a real
+  `hermes_agent.AIAgent` via `HermesLLMClient` and a
+  `HermesMemoryProvider`. Routes through OpenRouter using a cheap model
+  by default.
+
+### Local run with real Hermes
+
+```bash
+# 1. Install the [hermes] extra (pulls hermes-agent from PyPI).
+cd packages/skill
+pip install -e '.[hermes]'
+
+# 2. Put your OpenRouter key in repo-root .env (already in .gitignore).
+echo "OPEN_ROUTER_API_KEY=sk-or-..." >> ../../.env
+
+# 3. Seed Hermes memory with one chat turn.
+hearme-skill hermes-chat "Please remember: I really hate cilantro."
+
+# 4. Boot the skill in Hermes mode (in another shell).
+HEARME_USE_HERMES=1 python -m hearme_skill.dev_runner
+```
+
+| Variable                       | Default                                    | Meaning                                                  |
+|--------------------------------|--------------------------------------------|----------------------------------------------------------|
+| `HEARME_USE_HERMES`            | `0`                                        | `1` to enable Hermes-backed host.                        |
+| `HEARME_HERMES_MODEL`          | `openrouter/google/gemini-2.5-flash-lite`  | Hermes model identifier. Override for cheaper/better.    |
+| `HEARME_HERMES_MEMORY_MODE`    | `passthrough`                              | `passthrough` lets Hermes inject memory in the answer call. `extract` does a small extraction call per question first. |
+| `OPEN_ROUTER_API_KEY` / `OPENROUTER_API_KEY` | (required)                   | OpenRouter inference key.                                |
+| `HERMES_HOME`                  | `~/.hermes/`                               | Where Hermes stores its memory/profile.                  |
+
+### End-to-end test against real Hermes
+
+The cross-cutting test from ARCHITECTURE.md §12, upgraded to call a real
+Hermes via OpenRouter:
+
+```bash
+cd packages/skill
+pip install -e '.[dev,hermes]'
+pip install -e ../broker  # broker is launched as a subprocess
+pytest -v tests/test_e2e_hermes.py
+```
+
+The test:
+1. Spins up Postgres (testcontainers locally; service container in CI).
+2. Tells Hermes "I hate cilantro" via `HermesLLMClient.chat`.
+3. Inserts a question into the DB.
+4. Polls the broker via the same `BrokerClient` the steady-state loop
+   uses; calls `answer_one` to drive Persona → Answerer → Envelope.
+5. Asserts the envelope landed and the answer reflects the prior chat.
+
+Mocked / out-of-scope (matches v0 §11): phone is the dev `mock-phone.py`
+key; payments don't exist; the DelegationToken's zkPassport proof is a
+literal stub byte string. Real Hermes inference is the one piece that's
+*not* mocked.
+
+Skips cleanly when: `hermes-agent` not installed, `OPEN_ROUTER_API_KEY`
+missing, or Docker unavailable (and no `HEARME_E2E_PG_DSN`).
+
 ## Not yet real (every `# STUB:` in code)
 
 - **Payments.** No payment fields on the wire; `policy.min_payment`
