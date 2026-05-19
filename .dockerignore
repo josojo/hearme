@@ -1,0 +1,17 @@
+# Keep the build context small. Compose passes the repo root as context.
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.venv/
+**/venv/
+**/node_modules/
+**/.next/
+**/dist/
+**/build/
+**/.git/
+**/.idea/
+**/.vscode/
+**/.DS_Store
+*.log

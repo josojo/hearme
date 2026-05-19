@@ -217,6 +217,7 @@ Python service. Single binary. Two responsibilities: dispatch open questions to 
       "question_id": "uuid",
       "text": "...",
       "topic": "...",
+      "created_at": "2026-05-19T12:00:00Z",
       "closes_at": "2026-05-20T12:00:00Z",
       "nonce": "<random_per_question>"
     }
@@ -245,7 +246,8 @@ If any step fails, the envelope is rejected with a specific reason code; nothing
 
 **Question dispatch.**
 - Broker doesn't push; agents poll `/v1/questions/open?since=last_poll`.
-- Each agent tracks its own `last_poll` locally.
+- Each agent tracks its own `last_poll` locally from the max broker-supplied
+  `created_at` it has seen, not from the agent host's wall clock.
 - No per-agent state on the broker. This makes the broker stateless and trivial to restart.
 
 **Layout.**
@@ -348,6 +350,8 @@ The DelegationToken is set up out-of-band by `onboarding.py` (see §8) and lives
 
 ### 7.1 Channel — `broker.py`
 - Polls the broker at `GET /v1/questions/open?since=<last_seen>` on a configurable interval (default 30s).
+- Persists `last_seen` from broker-supplied `Question.created_at`, so local
+  host clock skew cannot skip questions.
 - Submits envelopes to `POST /v1/envelopes`.
 - Backoff, retry, replay. No business logic.
 

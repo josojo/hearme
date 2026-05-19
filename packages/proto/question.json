@@ -5,11 +5,16 @@
   "description": "Shape returned by GET /v1/questions/open. See ARCHITECTURE.md §5.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["question_id", "text", "closes_at", "nonce"],
+  "required": ["question_id", "text", "created_at", "closes_at", "nonce"],
   "properties": {
     "question_id": { "type": "string", "format": "uuid" },
     "text": { "type": "string" },
     "topic": { "type": ["string", "null"] },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Server-side question creation timestamp. Agents persist the max value as their polling cursor."
+    },
     "closes_at": { "type": "string", "format": "date-time" },
     "nonce": {
       "type": "string",

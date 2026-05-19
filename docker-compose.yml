@@ -1,3 +1,12 @@
+# `docker compose up` brings up the full hearme v0 stack: shared Postgres,
+# broker, web, and a dev skill instance pre-onboarded via scripts/mock-phone.py.
+#
+# First run:
+#   docker compose up --build
+# Then open http://localhost:3000.
+#
+# To wipe state and start from scratch:
+#   docker compose down -v && docker compose up --build
 services:
   postgres:
     image: postgres:16
@@ -22,5 +31,67 @@ services:
       timeout: 3s
       retries: 20
 
+  broker:
+    build:
+      context: .
+      dockerfile: packages/broker/Dockerfile
+    container_name: hearme-broker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # asyncpg DSN. scheme must be `postgres://` (asyncpg-style).
+      HEARME_BROKER_DATABASE_URL: postgres://hearme_broker:hearme_broker_dev@postgres:5432/hearme
+      # Default well-known phone pubkey matches scripts/mock-phone.py.
+      # Set HEARME_PHONE_PUBKEY_BASE64 to override.
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=2).read()"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    container_name: hearme-web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # postgres-js DSN. scheme `postgres://` works for both Drizzle's
+      # postgres driver and the Next.js runtime.
+      DATABASE_URL: postgres://hearme_web:hearme_web_dev@postgres:5432/hearme
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+
+  skill:
+    build:
+      context: .
+      dockerfile: packages/skill/Dockerfile
+    container_name: hearme-skill
+    restart: unless-stopped
+    depends_on:
+      broker:
+        condition: service_healthy
+    environment:
+      HEARME_SKILL_BROKER_URL: http://broker:8000
+      HEARME_SKILL_ROOT_DIR: /data
+      # Faster poll than the 30s default so the demo feels responsive.
+      HEARME_SKILL_POLL_INTERVAL_SECONDS: "5"
+      # Identifies this dev user — change to fork the unique_identifier and
+      # run multiple skill containers without colliding on the broker's
+      # one-answer-per-(question_id, unique_identifier) constraint.
+      HEARME_SKILL_UNIQUE_ID: dev-user-1
+    volumes:
+      - hearme-skill-data:/data
+
 volumes:
   hearme-pgdata:
+  hearme-skill-data:
