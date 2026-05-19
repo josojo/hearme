@@ -11,9 +11,10 @@ Implements the verification pipeline from ARCHITECTURE.md §5 in order:
      agent_signature is checked against, so any tampering of the embedded
      token would break step 6).
   6. Verify agent_signature over H(question_id || answer || nonce || delegation_hash).
-  7. Check question_id exists, status='open', closes_at > now(), nonce matches.
+  7. Check question_id exists, status='open', closes_at > now(), nonce matches,
+     and the signed demographic predicates are eligible for the question scope.
   8. INSERT envelope (UNIQUE constraint = duplicate rejection).
-  9. Recompute aggregates row for question_id.
+  9. Increment aggregates row for question_id.
 """
 
 from __future__ import annotations
@@ -23,10 +24,10 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
-from .. import aggregates
 from ..config import get_settings
 from ..db import get_pool
 from ..db import queries as q
+from ..eligibility import is_scope_eligible
 from ..models.schemas import Envelope, EnvelopeAck, RejectionReason
 from ..verify import (
     VerifyEnvelopeError,
@@ -85,6 +86,11 @@ async def submit_envelope(envelope: Envelope) -> EnvelopeAck:
             return _ack(False, RejectionReason.QUESTION_CLOSED)
         if question["nonce"] != envelope.nonce:
             return _ack(False, RejectionReason.NONCE_MISMATCH)
+        if not is_scope_eligible(
+            question=question,
+            disclosed_predicates=verified.token.disclosed_predicates,
+        ):
+            return _ack(False, RejectionReason.SCOPE_INELIGIBLE)
 
         # Step 6: agent signature.
         try:
@@ -114,7 +120,11 @@ async def submit_envelope(envelope: Envelope) -> EnvelopeAck:
             if not inserted:
                 # Composite PK collision — DB-enforced one-answer-per-human.
                 return _ack(False, RejectionReason.DUPLICATE)
-            await aggregates.recompute(conn, envelope.question_id)
+            await q.increment_aggregate(
+                conn,
+                question_id=envelope.question_id,
+                disclosed_predicates=verified.token.disclosed_predicates,
+            )
 
         # STUB: honeypot signal handling. v0 does no scoring on accepted
         # envelopes; v0.2 surfaces a per-user honeypot signal here

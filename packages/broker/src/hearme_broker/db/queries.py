@@ -4,7 +4,7 @@ Group by responsibility so the audit boundary is obvious:
 - ``questions_*`` — read-only against ``questions`` (per role grants).
 - ``revocations_*`` — read-only against ``revocations`` for verify-time checks.
 - ``envelopes_*`` — INSERT path only.
-- ``aggregates_*`` — recompute on each insert.
+- ``aggregates_*`` — incremental update on each accepted insert.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ async def get_question_for_verify(
 ) -> dict[str, Any] | None:
     row = await conn.fetchrow(
         """
-        SELECT id, status, closes_at, nonce
+        SELECT id, status, closes_at, nonce, scope, country, continent
         FROM questions
         WHERE id = $1
         """,
@@ -111,48 +111,66 @@ async def insert_envelope(
     return result.endswith(" 1")
 
 
-async def list_envelopes_for_question(
-    conn: asyncpg.Connection, question_id: UUID
-) -> list[dict[str, Any]]:
-    rows = await conn.fetch(
-        """
-        SELECT question_id, unique_identifier, disclosed_predicates
-        FROM envelopes
-        WHERE question_id = $1
-        """,
-        question_id,
-    )
-    out = []
-    for r in rows:
-        rec = dict(r)
-        # asyncpg returns JSONB as already-decoded dict via codec config; but in
-        # default config it returns a str. Normalize.
-        if isinstance(rec.get("disclosed_predicates"), str):
-            rec["disclosed_predicates"] = json.loads(rec["disclosed_predicates"])
-        out.append(rec)
-    return out
-
-
 # ----- aggregates --------------------------------------------------------
 
 
-async def upsert_aggregate(
+async def increment_aggregate(
     conn: asyncpg.Connection,
     *,
     question_id: UUID,
-    total_answers: int,
-    by_predicate: dict[str, int],
+    disclosed_predicates: dict[str, str],
 ) -> None:
+    """Increment the aggregate row for one newly accepted envelope.
+
+    The advisory transaction lock serializes first-writer creation of the
+    aggregate row for a question. After that, ``FOR UPDATE`` locks only the
+    single aggregate row, avoiding the previous full-envelope scan on every
+    insert.
+    """
     await conn.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+        str(question_id),
+    )
+    row = await conn.fetchrow(
         """
-        INSERT INTO aggregates (question_id, total_answers, by_predicate, updated_at)
-        VALUES ($1, $2, $3::jsonb, now())
-        ON CONFLICT (question_id) DO UPDATE
-        SET total_answers = EXCLUDED.total_answers,
-            by_predicate  = EXCLUDED.by_predicate,
-            updated_at    = now()
+        SELECT total_answers, by_predicate
+        FROM aggregates
+        WHERE question_id = $1
+        FOR UPDATE
         """,
         question_id,
-        total_answers,
+    )
+    delta: dict[str, int] = {}
+    for key, value in (disclosed_predicates or {}).items():
+        predicate_key = f"{key}:{value}"
+        delta[predicate_key] = delta.get(predicate_key, 0) + 1
+
+    if row is None:
+        await conn.execute(
+            """
+            INSERT INTO aggregates (question_id, total_answers, by_predicate, updated_at)
+            VALUES ($1, 1, $2::jsonb, now())
+            """,
+            question_id,
+            json.dumps(delta),
+        )
+        return
+
+    by_predicate = row["by_predicate"]
+    if isinstance(by_predicate, str):
+        by_predicate = json.loads(by_predicate)
+    by_predicate = dict(by_predicate or {})
+    for key, count in delta.items():
+        by_predicate[key] = int(by_predicate.get(key, 0)) + count
+
+    await conn.execute(
+        """
+        UPDATE aggregates
+        SET total_answers = total_answers + 1,
+            by_predicate = $2::jsonb,
+            updated_at = now()
+        WHERE question_id = $1
+        """,
+        question_id,
         json.dumps(by_predicate),
     )

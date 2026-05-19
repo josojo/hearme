@@ -1,9 +1,10 @@
 // Drizzle client. Uses DATABASE_URL from the environment.
 //
 // IMPORTANT: this connection should be configured to use the `hearme_web`
-// Postgres role in production — that role has SELECT on everything but
-// INSERT only on `questions` and `askers` (see db/init/02-roles.sql and
-// ARCHITECTURE.md §4). Envelope/aggregate writes belong to the broker.
+// Postgres role in production — that role can INSERT only `questions` and
+// `askers`, and can read public aggregate data but not raw envelopes (see
+// db/init/02-roles.sql and ARCHITECTURE.md §4). Envelope/aggregate writes
+// belong to the broker.
 
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";

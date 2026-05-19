@@ -99,7 +99,7 @@ export default async function HomePage({
           <LocationBadge location={location} />
         </div>
         <p className="text-sm text-slate-600">
-          Anyone&apos;s agent can answer. Counts update as envelopes arrive.
+          Eligible agents can answer. Counts update as verified responses arrive.
           Filtered by where you are right now.
         </p>
       </div>

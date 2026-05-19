@@ -1,7 +1,7 @@
-"""Aggregate recompute — by_predicate must match hand computation.
+"""Aggregate helpers — by_predicate must match hand computation.
 
 Pure-function test for ``compute_by_predicate`` plus an end-to-end run
-against real Postgres for ``recompute``.
+against real Postgres for incremental aggregate updates.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from hearme_broker.aggregates import compute_by_predicate, recompute
+from hearme_broker.aggregates import compute_by_predicate
 from hearme_broker.db import queries as q
 
 
@@ -48,8 +48,8 @@ pytestmark_async = pytest.mark.asyncio
 
 
 @pytest.mark.asyncio
-async def test_recompute_against_real_pg(pg_pool, make_token, make_envelope):
-    # Seed 3 envelopes for one question; assert aggregates row matches.
+async def test_increment_aggregate_against_real_pg(pg_pool, make_token, make_envelope):
+    # Seed 3 accepted envelopes for one question; assert aggregate increments match.
     qid = uuid.uuid4()
     async with pg_pool.acquire() as conn:
         await conn.execute(
@@ -79,8 +79,11 @@ async def test_recompute_against_real_pg(pg_pool, make_token, make_envelope):
                 agent_signature="sig",
                 delegation_hash_hex="hash",
             )
-
-        await recompute(conn, qid)
+            await q.increment_aggregate(
+                conn,
+                question_id=qid,
+                disclosed_predicates=preds,
+            )
 
         row = await conn.fetchrow(
             "SELECT total_answers, by_predicate FROM aggregates WHERE question_id = $1",

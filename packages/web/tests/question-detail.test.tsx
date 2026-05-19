@@ -6,7 +6,7 @@
 // dimensions, values, and counts all appear in the DOM.
 
 import { describe, it, expect } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { QuestionDetail } from "../src/components/question-detail";
 import { groupByDimension } from "../src/components/aggregate-chart";
 
@@ -26,10 +26,6 @@ describe("QuestionDetail rendering", () => {
         question={baseQuestion}
         totalAnswers={0}
         byPredicate={{}}
-        envelopes={[]}
-        page={1}
-        pageSize={25}
-        hasNextPage={false}
       />,
     );
     expect(
@@ -52,10 +48,6 @@ describe("QuestionDetail rendering", () => {
         question={baseQuestion}
         totalAnswers={60}
         byPredicate={byPredicate}
-        envelopes={[]}
-        page={1}
-        pageSize={25}
-        hasNextPage={false}
       />,
     );
 
@@ -75,38 +67,17 @@ describe("QuestionDetail rendering", () => {
     expect(screen.getByText("30")).toBeTruthy();
   });
 
-  it("renders individual envelopes with their disclosed predicates", () => {
+  it("does not render individual envelopes or stable user identifiers", () => {
     render(
       <QuestionDetail
         question={baseQuestion}
         totalAnswers={2}
         byPredicate={{ "region:EU": 2 }}
-        envelopes={[
-          {
-            uniqueIdentifier: "abc123def456",
-            answer: "Yes, with caveats.",
-            disclosedPredicates: { region: "EU", age_band: "25-34" },
-            submittedAt: new Date("2026-05-19T11:00:00Z"),
-          },
-          {
-            uniqueIdentifier: "zzz999yyy888",
-            answer: "Strongly opposed.",
-            disclosedPredicates: { region: "EU", age_band: "35-44" },
-            submittedAt: new Date("2026-05-19T11:05:00Z"),
-          },
-        ]}
-        page={1}
-        pageSize={25}
-        hasNextPage={false}
       />,
     );
 
-    expect(screen.getByText("Yes, with caveats.")).toBeTruthy();
-    expect(screen.getByText("Strongly opposed.")).toBeTruthy();
-
-    // Disclosed-predicate chips on each envelope.
-    expect(screen.getByText("age_band: 25-34")).toBeTruthy();
-    expect(screen.getByText("age_band: 35-44")).toBeTruthy();
+    expect(screen.queryByText("Answers")).toBeNull();
+    expect(screen.queryByText(/user /i)).toBeNull();
   });
 
   it("shows an empty-state when there are no answers", () => {
@@ -115,16 +86,9 @@ describe("QuestionDetail rendering", () => {
         question={baseQuestion}
         totalAnswers={0}
         byPredicate={{}}
-        envelopes={[]}
-        page={1}
-        pageSize={25}
-        hasNextPage={false}
       />,
     );
 
-    expect(
-      screen.getByText(/No envelopes recorded yet/i),
-    ).toBeTruthy();
     expect(
       screen.getByText(/No answers yet/i),
     ).toBeTruthy();
@@ -157,6 +121,3 @@ describe("groupByDimension", () => {
     expect(grouped.other).toEqual([{ value: "standalone", count: 5 }]);
   });
 });
-
-// Silence unused-import warnings from `within`.
-void within;
