@@ -59,7 +59,7 @@ def now() -> datetime:
 
 @pytest.fixture
 def fresh_token(agent_keypair: Keypair, now: datetime) -> DelegationToken:
-    """A freshly-issued DelegationToken wrapping a (bundle-shaped) zkPassport proof."""
+    """A freshly-issued, broker-signed DelegationToken (placeholder signature)."""
     return _build_token(
         agent_keypair=agent_keypair,
         unique_id=base64.b64encode(b"u" * 32).decode("ascii"),
