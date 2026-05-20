@@ -106,30 +106,27 @@ async def submit_envelope(envelope: Envelope) -> EnvelopeAck:
             log.info("envelope verify failed: %s", exc)
             return _ack(False, exc.reason)
 
-        # Step 6b: identity binding. If this nullifier has been bound to a
-        # *different* agent_key in the past, reject — that's either a
-        # cross-agent key replay or a phone re-issuing without revoking
-        # the old delegation. Acceptable resolution paths:
-        #   - same passport, same agent_key, refreshed token: OK (UPSERT updates last_seen_at).
-        #   - same passport, NEW agent_key, previous delegation revoked: OK
-        #     iff the broker has accepted a revocation for the previous
-        #     binding's delegation_hash (revocation propagation is v0.3;
-        #     for now we reject and surface a clear reason).
-        existing_agent = await q.get_bound_agent_key(
-            conn, verified.token.unique_identifier
-        )
-        if existing_agent is not None and existing_agent != verified.token.agent_key:
-            log.info(
-                "identity already bound: nullifier=%s existing=%s new=%s",
-                verified.token.unique_identifier[:12] + "…",
-                existing_agent[:12] + "…",
-                verified.token.agent_key[:12] + "…",
-            )
-            return _ack(False, RejectionReason.IDENTITY_ALREADY_BOUND)
-
         # Steps 7-9 in a transaction so aggregates can't drift from envelopes
         # and the nullifier binding is persisted only when the envelope lands.
         async with conn.transaction():
+            # Step 6b: identity binding. If this nullifier has been bound to a
+            # *different* agent_key in the past, reject atomically inside the
+            # transaction. The INSERT/ON CONFLICT lock in bind_nullifier_agent
+            # closes the race where two first envelopes for the same nullifier
+            # arrive under different agent keys.
+            bound = await q.bind_nullifier_agent(
+                conn,
+                nullifier=verified.token.unique_identifier,
+                agent_key=verified.token.agent_key,
+            )
+            if not bound:
+                log.info(
+                    "identity already bound: nullifier=%s new=%s",
+                    verified.token.unique_identifier[:12] + "…",
+                    verified.token.agent_key[:12] + "…",
+                )
+                return _ack(False, RejectionReason.IDENTITY_ALREADY_BOUND)
+
             inserted = await q.insert_envelope(
                 conn,
                 question_id=envelope.question_id,
@@ -142,11 +139,6 @@ async def submit_envelope(envelope: Envelope) -> EnvelopeAck:
             if not inserted:
                 # Composite PK collision — DB-enforced one-answer-per-human.
                 return _ack(False, RejectionReason.DUPLICATE)
-            await q.upsert_nullifier_binding(
-                conn,
-                nullifier=verified.token.unique_identifier,
-                agent_key=verified.token.agent_key,
-            )
             await q.increment_aggregate(
                 conn,
                 question_id=envelope.question_id,

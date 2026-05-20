@@ -98,16 +98,18 @@ async def test_nullifier_binding_persists_and_is_idempotent(pg_pool, make_token)
 
     async with pg_pool.acquire() as conn:
         assert await q.get_bound_agent_key(conn, nullifier) is None
-        await q.upsert_nullifier_binding(
+        ok = await q.bind_nullifier_agent(
             conn, nullifier=nullifier, agent_key=agent_key
         )
+        assert ok is True
         bound = await q.get_bound_agent_key(conn, nullifier)
         assert bound == agent_key
 
         # Refresh with the same agent_key — UPDATE last_seen_at; row count unchanged.
-        await q.upsert_nullifier_binding(
+        ok = await q.bind_nullifier_agent(
             conn, nullifier=nullifier, agent_key=agent_key
         )
+        assert ok is True
         cnt = await conn.fetchval(
             "SELECT count(*) FROM nullifiers WHERE nullifier = $1", nullifier
         )
@@ -124,13 +126,15 @@ async def test_nullifier_binding_rejects_different_agent_key(pg_pool, make_token
     other_agent_b64 = base64.b64encode(b"\x77" * 32).decode("ascii")
 
     async with pg_pool.acquire() as conn:
-        await q.upsert_nullifier_binding(
+        ok = await q.bind_nullifier_agent(
             conn, nullifier=nullifier, agent_key=first["agent_key"]
         )
+        assert ok is True
         # Stray attempt to bind a different agent_key under the same nullifier.
-        await q.upsert_nullifier_binding(
+        ok = await q.bind_nullifier_agent(
             conn, nullifier=nullifier, agent_key=other_agent_b64
         )
+        assert ok is False
         # Binding still maps to the original agent_key.
         bound = await q.get_bound_agent_key(conn, nullifier)
         assert bound == first["agent_key"]
