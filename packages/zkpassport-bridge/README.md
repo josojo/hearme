@@ -18,9 +18,14 @@ cryptographic check to this service while keeping all the structural/binding
 checks (agent-key bind, scope, nullifier↔unique_identifier, predicate
 re-derivation) in Python.
 
-Verification is **off-chain**: `SelfBackendVerifier` runs entirely on this
-backend and needs **no Celo RPC** at runtime. Trust assumption: the proof is
-only as trustworthy as this bridge's pinned verification keys.
+The SNARK check is **off-chain**: `SelfBackendVerifier` runs entirely on this
+backend. To anchor that off-chain proof to the *real* Self registry (where
+one-passport→one-identity is enforced), `/verify` **also** does a **one-time
+on-chain read of Self's Celo Identity Registry at registration** — confirming the
+proof's Merkle root is current/known and the identity is registered. This is the
+only chain access in the system, and it never happens per answer. Trust
+assumption: the proof is only as trustworthy as this bridge's pinned verification
+keys plus that registry-root confirmation.
 
 ## Transport model (differs from zkPassport)
 
@@ -38,7 +43,7 @@ the skill to poll.
 | `POST` | `/requests`      | skill   | create Self request(s) bound to an agent key; returns QR/universal-link `urls` |
 | `GET`  | `/requests/:id`  | skill   | poll for the relayed + verified proof(s); returns the verifiable `bundle`(s) |
 | `POST` | `/callback`      | Self app| **the SelfApp `endpoint`** — receives a proof, verifies it, stores the result |
-| `POST` | `/verify`        | broker  | stateless verify of a bundle — **called once at registration** (`POST /v1/register`), never per envelope (Self proofs expire ±1 day; the broker issues its own session credential — ARCHITECTURE §5/§8) |
+| `POST` | `/verify`        | broker  | verify a bundle (off-chain SNARK) **+ one-time on-chain Celo registry/root check** — **called once at registration** (`POST /v1/register`), never per envelope (Self proofs expire ±1 day; the broker issues its own session credential — ARCHITECTURE §5/§8) |
 
 ### `POST /requests`
 ```json
@@ -55,21 +60,24 @@ one nullifier (§8.3 of ARCHITECTURE.md). `minimal` emits only the `18+` request
 → `{ status, verified, uniqueIdentifier, disclosed, boundAgentKey, bundles }`
 once all expected proofs are `complete`. Each `bundle =
 { attestationId, proof, publicSignals, userContextData }` is what the skill
-embeds in `DelegationToken.self_proofs[]`. `disclosed` carries the raw
-`nationality` and the `olderThan` boolean per bundle; the skill buckets these
-into `region` / `age_band`.
+puts in the `EnrollmentBundle.self_proofs[]` it sends to the broker's
+`POST /v1/register`. `disclosed` carries the raw `nationality` and the
+`olderThan` boolean per bundle; the broker buckets these into `region` /
+`age_band` (it is authoritative).
 
 ### `POST /verify`
 ```json
 { "attestationId": 1, "proof": {...}, "publicSignals": [...], "userContextData": "0x..." }
 ```
-→ `{ verified, uniqueIdentifier, disclosed, boundAgentKey }`.
+→ `{ verified, uniqueIdentifier, disclosed, boundAgentKey, registryConfirmed }`.
 
 A tampered `userContextData` (agent-key bind), wrong scope, expired proof
-(±1 day), or invalid proof fails here. At registration the broker derives the
-authoritative `region`/`age_band` from `disclosed`, binds the nullifier, and
-mints the session credential — so this `disclosed` output is consumed once, not
-re-checked per answer.
+(±1 day), or invalid proof fails here. **`registryConfirmed`** is the on-chain
+result: `true` only if the proof's Merkle root is a current/known root in Self's
+Celo Identity Registry and the identity is registered (requires `SELF_CELO_RPC_URL`;
+the broker rejects registration unless it is `true`). This `/verify` output is
+consumed **once at registration** — the broker then mints the session credential,
+and nothing here is re-checked per answer.
 
 ## Config (env)
 
@@ -79,6 +87,7 @@ re-checked per answer.
 | `SELF_ENDPOINT` | — | public URL of this bridge's `/callback`; must match the SelfApp `endpoint` |
 | `SELF_ENDPOINT_TYPE` | `staging_https` | `staging_https` (testnet) or `https` (production) |
 | `SELF_MOCK_PASSPORT` | `1` | `1` = staging/Celo Sepolia, accepts **mock-passport** proofs (testing); `0` = mainnet, requires a real passport |
+| `SELF_CELO_RPC_URL` | — | Celo RPC endpoint for the **registration-time** on-chain Identity-Registry / Merkle-root check (Sepolia when `SELF_MOCK_PASSPORT=1`, mainnet when `0`). If unset, `registryConfirmed` is `false` and the broker rejects registration in production. Used **only** at `/verify` (registration), never per answer. |
 | `SELF_ALLOWED_IDS` | `passport` | accepted attestation types (e.g. `passport`, `eu_id_card`) |
 | `SELF_AGE_THRESHOLDS` | `18,25,35,50,65` | the `older-than` ladder for the `standard` profile |
 | `PORT` | `8787` | HTTP port |

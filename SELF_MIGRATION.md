@@ -13,7 +13,7 @@ non-negotiables, verified against the real docs:
 
 | Non-negotiable | Self mechanism | Verified |
 |---|---|---|
-| Off-chain verify, no Celo RPC at runtime | `@selfxyz/core` `SelfBackendVerifier.verify()` runs on our backend | ✅ |
+| Off-chain verify at answer time (no per-answer chain access) | `@selfxyz/core` `SelfBackendVerifier.verify()` runs on our backend; the only on-chain read is a one-time registry check at registration | ✅ |
 | Bind agent key into the proof | `userDefinedData` (variable-length `bytes`), committed via `userContextData`; returned by `verify()` | ✅ |
 | Stable per-scope unique identifier | nullifier is `unique-per-user-per-scope` | ✅ |
 
@@ -44,6 +44,7 @@ non-negotiables, verified against the real docs:
 | **New endpoint** | — | `POST /v1/register` |
 | **New table** | — | `registrations` (nullifier registry; see below) |
 | **New broker secret** | — | `broker_key` (Ed25519; signs the DelegationToken) |
+| **On-chain access** | none | one Celo Identity-Registry / Merkle-root read **at registration only** (`registryConfirmed`); Sybil hardening |
 
 ### Env vars
 
@@ -56,6 +57,7 @@ non-negotiables, verified against the real docs:
 | `HEARME_BROKER_ZKPASSPORT_BRIDGE_URL` | `HEARME_BROKER_SELF_BRIDGE_URL` |
 | `HEARME_SKILL_ZKPASSPORT_BRIDGE_URL` | `HEARME_SKILL_SELF_BRIDGE_URL` |
 | — | `SELF_ENDPOINT`, `SELF_ENDPOINT_TYPE`, `SELF_ALLOWED_IDS`, `SELF_AGE_THRESHOLDS` (new) |
+| — | `SELF_CELO_RPC_URL` (new; bridge) — registration-time on-chain Identity-Registry / Merkle-root read; **only on-chain access in the system**, never per answer |
 | — | `HEARME_BROKER_SIGNING_KEY` (the `broker_key`; v0 from config/secret) |
 
 ## Per-component work
@@ -65,12 +67,12 @@ non-negotiables, verified against the real docs:
 - `POST /requests {agentKey, profile}` → build SelfApp config(s) via `SelfAppBuilder` (scope, endpoint, `userDefinedData=hex(agentKey)`, disclosures `{nationality, minimumAge}`); return `{requestId, urls[]}` (one per threshold for `standard`).
 - `POST /callback` → **the SelfApp endpoint**: receive `{attestationId, proof, publicSignals, userContextData}`, run `SelfBackendVerifier.verify()`, store result under `requestId`, return the app-expected ack.
 - `GET /requests/:id` → return `{status, verified, uniqueIdentifier, disclosed, boundAgentKey, bundles[]}`.
-- `POST /verify` → stateless verify of a bundle. **Called only by the broker at registration**, not per envelope.
+- `POST /verify` → off-chain SNARK verify **+ one-time on-chain Celo Identity-Registry / Merkle-root check** (via `SELF_CELO_RPC_URL`); returns `registryConfirmed`. **Called only by the broker at registration**, not per envelope.
 - See `packages/self-bridge/README.md` (already written) for the full endpoint/env spec.
 
 ### 2. `packages/broker`
 - **`routes/register.py`** (new) → `POST /v1/register`: the registration pipeline (ARCHITECTURE §5).
-- **`verify/self_identity.py`**: call bridge `/verify` per `self_proofs[]`; enforce bindings (agent_key == `userDefinedData`, scope, all proofs share one nullifier == `unique_identifier`); **derive** `region`/`age_band` (broker is authoritative).
+- **`verify/self_identity.py`**: call bridge `/verify` per `self_proofs[]`; **require `registryConfirmed === true`** (the on-chain Merkle-root / registry check); enforce bindings (agent_key == `userDefinedData`, scope, all proofs share one nullifier == `unique_identifier`); **derive** `region`/`age_band` (broker is authoritative).
 - **`verify/credential.py`** (new): hold the `broker_key`; `issue(token_claims) -> broker_signature`; `verify(delegation_token)`.
 - **`verify/delegation.py`**: per-envelope only — verify `broker_signature`, expiry, and registry/revocation (`registrations` lookup). **No bridge call.**
 - Pure helpers: `country_to_region()`, `thresholds_to_age_band()`.
@@ -100,7 +102,7 @@ non-negotiables, verified against the real docs:
 - `--bridge-url` defaults → renamed service.
 
 ## Testing changes (ARCHITECTURE §12)
-- **Registration**: mock the bridge with a canned `VerificationResult`; assert binding rejections, `InvalidTimestamp`/expired-proof rejection, and the Sybil bind (second nullifier+different-key rejected).
+- **Registration**: mock the bridge with a canned `VerificationResult`; assert binding rejections, `InvalidTimestamp`/expired-proof rejection, **rejection when `registryConfirmed === false`** (stale/forged Merkle root), and the Sybil bind (second nullifier+different-key rejected).
 - **Credential** (`credential.py`): sign/verify round-trip; tampered claim or non-broker key rejected.
 - **Predicate derivation** (`test_predicate_derivation.py`): country→region, thresholds→age_band (boundaries, unmapped country, partial set → `18+`).
 - **Verify envelope**: expired/revoked/unknown registration, signature swaps; **assert the bridge client is never called on this path**.
@@ -115,7 +117,7 @@ non-negotiables, verified against the real docs:
 | 3 | Multi-proof onboarding UX | ⚠️ **Mostly resolved** — passport scanned **once** (identity cached), then N proof round-trips (no batching: one disclosure config per proof). Chain the deeplinks; prototype latency on a real device. |
 | 4 | Attestation IDs to allow | ⏳ Confirm `AllIds` (passport vs EU ID card vs Aadhaar) → set `SELF_ALLOWED_IDS`. |
 | 5 | Supported Node version for `@selfxyz/core` | ⏳ Confirm + pin (experimental SDK). |
-| 6 | Off-chain registry/merkle trust | ⏳ Docs say no RPC; verifier does not consult Celo's live registry → document residual trust (IDENTITY.md caveat 5). |
+| 6 | Off-chain registry/merkle trust | ✅ **Addressed by design** — registration-time on-chain Identity-Registry / Merkle-root read (`SELF_CELO_RPC_URL`, `registryConfirmed`) anchors the off-chain SNARK to the real registry. **Confirm during impl:** the exact registry/hub contract address + the recent-roots interface to query on Celo (Sepolia for staging, mainnet for prod). |
 
 ## Sequencing
 1. Land these docs (this PR).

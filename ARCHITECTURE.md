@@ -7,7 +7,7 @@ Three components wired together:
 
 Plus a shared Postgres database, and the user's phone (running the **Self** app, [self.xyz](https://self.xyz)) which appears only at install/refresh time.
 
-> **Identity provider: Self (self.xyz).** Hearme's proof-of-personhood layer is built on Self — passport/national-ID NFC + zk-SNARKs, verified **off-chain** on our own backend with no Celo RPC dependency. This replaced an earlier zkPassport integration; see `IDENTITY.md` for the why and §8 for the concrete flow.
+> **Identity provider: Self (self.xyz).** Hearme's proof-of-personhood layer is built on Self — passport/national-ID NFC + zk-SNARKs. Proofs are SNARK-verified **off-chain** on our own backend; the **only** on-chain dependency is a single Celo Identity-Registry read **at registration** (§5, Sybil hardening). Per answer there is **no chain access and no proof at all** (§1.5). This replaced an earlier zkPassport integration; see `IDENTITY.md` for the why and §8 for the concrete flow.
 
 ## 1. Design principles
 
@@ -30,7 +30,7 @@ The DelegationToken's `uniqueIdentifier` is the **Self nullifier** under the sin
 ### 1.5 Verify all, trust none (broker side)
 The broker treats every envelope as potentially malicious. Verification is split in two:
 
-- **Once, at registration (`POST /v1/register`, §8.1):** the broker runs the real SNARK check on the Self proof set via the **self-bridge**, enforces the bindings (agent_key ↔ `userDefinedData`, scope, one shared nullifier), re-derives the bucketed predicates, atomically binds `nullifier ↔ agent_key` in the registry, and issues a **broker-signed DelegationToken**.
+- **Once, at registration (`POST /v1/register`, §8.1):** the broker runs the real SNARK check on the Self proof set via the **self-bridge**, **confirms the proof's Merkle root against Self's live on-chain Identity Registry on Celo** (the one and only on-chain read — see §5; it proves the proof was built against the real registry, where one-passport→one-identity is enforced), enforces the bindings (agent_key ↔ `userDefinedData`, scope, one shared nullifier), re-derives the bucketed predicates, atomically binds `nullifier ↔ agent_key` in the registry, and issues a **broker-signed DelegationToken**.
 - **Per envelope (`POST /v1/envelopes`):** the broker verifies *its own* signature on the DelegationToken, the token's expiry, the registry/revocation status, the agent's per-question signature, the request linkage, and the uniqueness constraint — every time. **No bridge call, no Self proof, no raw passport data** at answer time.
 
 There is no phone signature on the token; registration integrity comes from the SNARK, per-answer integrity from the broker's signature. The frontend never sees raw envelopes; it sees only verified writes.
@@ -266,6 +266,14 @@ For v0, simple HTTP polling is fine. Long-poll or WebSocket is a v0.2 transport 
 parse enrollment bundle (pydantic): {self_proofs[], agent_key}
   → for each self_proof: verify real SNARK via the self-bridge (@selfxyz/core)
        (rejects if proof invalid OR timestamp outside Self's ±1 day window)
+  → ON-CHAIN REGISTRY CHECK (registration only, one Celo RPC read via the self-bridge):
+       confirm each proof's identity-registry Merkle root is a CURRENT/known root
+       published by Self's on-chain Identity Registry / Hub on Celo, AND the identity
+       is registered. This is what makes the off-chain SNARK trustworthy: it proves the
+       proof was built against the REAL Self registry (where one-passport→one-identity is
+       enforced), not a forged/stale tree an attacker assembled. Reject if the root is
+       unknown/stale, the identity is not registered, or the RPC is required-but-unreachable.
+       (This is the ONLY on-chain read in the system, and it happens once per identity.)
   → enforce bindings: agent_key == userDefinedData, scope == "hearme-v1",
        all proofs carry the SAME nullifier  → unique_identifier
   → re-derive region (from disclosed nationality) and age_band (from the older-than
@@ -484,7 +492,7 @@ The cheap gate. Sits between Policy and Persona. Exists to satisfy §1.14: most 
 
 ## 8. Onboarding — the DelegationToken handoff
 
-The only time the phone produces cryptographic material for the agent. Built on **Self** ([self.xyz](https://self.xyz)): passport/ID NFC + zk-SNARK, with **off-chain** verification on the self-bridge (`@selfxyz/core`'s `SelfBackendVerifier`) — no Celo RPC at runtime.
+The only time the phone produces cryptographic material for the agent. Built on **Self** ([self.xyz](https://self.xyz)): passport/ID NFC + zk-SNARK, SNARK-verified **off-chain** on the self-bridge (`@selfxyz/core`'s `SelfBackendVerifier`), plus a one-time on-chain Celo Identity-Registry read at registration (§5). Per answer: no chain access.
 
 ### 8.0 Why a bridge sidecar (still)
 
@@ -670,7 +678,7 @@ Marked `# STUB:` in code and listed in each package's README under "Not yet real
 
 - **Payments.** No money flows anywhere in v0. The pitch's "fraction of a cent" is deferred to v0.3. No payment fields in the schema.
 - **Asker auth.** Display name only; anyone can post. Asker accounts and auth land in v0.2.
-- **Real Self proof verification, verify-once — DESIGN (this change).** At `POST /v1/register`, `verify/self_identity.py` runs `@selfxyz/core`'s `SelfBackendVerifier.verify()` through the **self-bridge** (`packages/self-bridge`, a Node sidecar — `@selfxyz/core` is Node-only) on the enrollment bundle, enforces the bindings (agent_key via `userDefinedData`, scope, one shared nullifier ↔ unique_identifier), **derives** `region`/`age_band` from the disclosed nationality and older-than booleans, atomically binds the nullifier ↔ agent_key in the `registrations` registry, and `verify/credential.py` issues a **broker-signed DelegationToken**. Per envelope, only that token's broker signature + registry/revocation are checked — **no Self proof at answer time** (forced by Self's ±1 day proof window; also removes per-envelope SNARK cost and closes the §1.2 transit gap). Mock-passport proofs verify only with `SELF_MOCK_PASSPORT=1` (staging / Celo Sepolia). See `packages/proto/{enrollment,self,delegation}.json` and `packages/broker/src/hearme_broker/verify/`. *Flips to DONE once the code lands; migration plan is `SELF_MIGRATION.md`.* **Open caveat:** Self's off-chain verifier trusts the bundled verification keys and does **not** consult Celo's live identity registry, so a Celo-side revocation is not reflected — Hearme's own `registrations` registry is the operative Sybil control.
+- **Real Self proof verification, verify-once — DESIGN (this change).** At `POST /v1/register`, `verify/self_identity.py` runs `@selfxyz/core`'s `SelfBackendVerifier.verify()` through the **self-bridge** (`packages/self-bridge`, a Node sidecar — `@selfxyz/core` is Node-only) on the enrollment bundle, enforces the bindings (agent_key via `userDefinedData`, scope, one shared nullifier ↔ unique_identifier), **derives** `region`/`age_band` from the disclosed nationality and older-than booleans, atomically binds the nullifier ↔ agent_key in the `registrations` registry, and `verify/credential.py` issues a **broker-signed DelegationToken**. Per envelope, only that token's broker signature + registry/revocation are checked — **no Self proof at answer time** (forced by Self's ±1 day proof window; also removes per-envelope SNARK cost and closes the §1.2 transit gap). Mock-passport proofs verify only with `SELF_MOCK_PASSPORT=1` (staging / Celo Sepolia). See `packages/proto/{enrollment,self,delegation}.json` and `packages/broker/src/hearme_broker/verify/`. *Flips to DONE once the code lands; migration plan is `SELF_MIGRATION.md`.* **Sybil hardening:** at registration the broker also performs a one-time on-chain read of Self's Celo Identity Registry to confirm the proof's Merkle root is live (§5) — this anchors the off-chain SNARK to the real registry (where one-passport→one-identity is enforced) and is the only on-chain dependency. **Residual caveats:** (a) a *Celo-side revocation made after registration* is not re-checked per answer (Hearme's own `registrations` registry governs revocation thereafter); (b) one human holding multiple legal passports yields multiple nullifiers — see the Sybil-resistance discussion in `IDENTITY.md`.
 - **Memory provider abstraction.** Skill hard-codes one provider (Mem0 or Holographic). Wire the abstraction in v0.2.
 - **Multi-channel skill UI.** Telegram only in v0.
 - **Revocation propagation.** Broker has the `revocations` table; skill respects expiry; live revocation publishing flow lands in v0.2.

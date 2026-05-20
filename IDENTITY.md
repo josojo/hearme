@@ -2,7 +2,7 @@
 
 > Identity is the foundation of Hearme. Without a credible "one human, one voice" guarantee, every aggregate signal the platform produces is worthless.
 
-> **Decision (2026-05):** Hearme's proof-of-personhood is built on **Self ([self.xyz](https://self.xyz))**, the single identity provider. An earlier design used **zkPassport**; we switched after weighing adoption and longevity (Self: 8–15M users, Google Cloud / Opera / Celo backing; zkPassport: niche, "not production-ready for critical apps" per Safe research) *and* confirming Self's SDK preserves Hearme's three non-negotiables — off-chain verification with no Celo RPC, in-proof agent-key binding, and a stable per-scope nullifier. zkPassport is retained below only as **alternatives-considered** context. The concrete wire format and flow live in `ARCHITECTURE.md` §8; the code migration plan in `SELF_MIGRATION.md`.
+> **Decision (2026-05):** Hearme's proof-of-personhood is built on **Self ([self.xyz](https://self.xyz))**, the single identity provider. An earlier design used **zkPassport**; we switched after weighing adoption and longevity (Self: 8–15M users, Google Cloud / Opera / Celo backing; zkPassport: niche, "not production-ready for critical apps" per Safe research) *and* confirming Self's SDK preserves Hearme's three non-negotiables — off-chain verification at answer time (the only chain read is a one-time registry check at registration), in-proof agent-key binding, and a stable per-scope nullifier. zkPassport is retained below only as **alternatives-considered** context. The concrete wire format and flow live in `ARCHITECTURE.md` §8; the code migration plan in `SELF_MIGRATION.md`.
 
 ## The Problem
 
@@ -63,7 +63,7 @@ Self ([self.xyz](https://self.xyz), formerly OpenPassport, acquired by Self Labs
 
 | Requirement | How Self satisfies it |
 |---|---|
-| **Off-chain verification, no Celo RPC at runtime** | `@selfxyz/core`'s `SelfBackendVerifier.verify()` runs entirely on our Node backend (the self-bridge). Trust assumption: "users trust your backend verifies correctly." |
+| **Off-chain verification at answer time** | `@selfxyz/core`'s `SelfBackendVerifier.verify()` runs on our Node backend (the self-bridge); per answer there is no chain access at all. The **one** on-chain dependency is a single Celo Identity-Registry read **at registration** (Sybil hardening, below). |
 | **Bind the agent key into the proof** | `userDefinedData` (hex) carries the 32-byte Ed25519 agent key; the proof commits to it via `userContextData`. The broker checks the returned `userDefinedData` equals the bound agent key — a tampered binding fails verification. |
 | **Stable per-scope unique identifier** | The nullifier is `unique-per-user-per-scope`; `scope="hearme-v1"` gives one stable identifier per passport across all Hearme answers. |
 
@@ -121,7 +121,7 @@ After successful passport verification, a Hearme identity consists of:
 
 4. **State-level attacks.** A government with control over its CSCA could issue fake passports and create fake Hearme identities at scale. Mitigations: monitor per-country registration rates, flag anomalies, optionally weight or cap per-country participation in any single question.
 
-5. **Off-chain verification trusts the bridge.** Self's `SelfBackendVerifier` runs on our backend and does **not** consult Celo's live identity registry; an identity revoked on-chain is not reflected. Hearme's own nullifier registry is the operative Sybil control, so this is acceptable, but it means the bridge's verification keys and `@selfxyz/core` version are trust-critical (pinned, and a compromised/buggy bridge could accept bad proofs).
+5. **Off-chain verification trusts the bridge — anchored by a registration-time on-chain check.** Self's `SelfBackendVerifier` SNARK-checks proofs off-chain. To stop a forged/stale Merkle root (which would let a fabricated identity slip through), at registration the broker also reads Self's **on-chain Celo Identity Registry once** to confirm the proof's root is current and the identity is registered (`SELF_CELO_RPC_URL` / `registryConfirmed`; ARCHITECTURE §5). Residual: this read happens only at registration, so a Celo-side revocation made *afterward* isn't reflected — Hearme's own `registrations` registry governs revocation from then on. The bridge's pinned verification keys and `@selfxyz/core` version remain trust-critical (a compromised/buggy bridge could accept bad proofs).
 
 6. **Single-provider dependency.** With one provider, a Self outage or critical vulnerability stalls onboarding (steady-state answering is unaffected — the phone isn't a hot dependency, ARCHITECTURE §1.13). Adding a second provider is possible later but only with a shared nullifier derivation (see "Why a single provider").
 
