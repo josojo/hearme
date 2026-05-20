@@ -1,63 +1,87 @@
-# hearme-zkpassport-bridge
+# hearme-self-bridge
 
-A small Node sidecar that wraps [`@zkpassport/sdk`](https://www.npmjs.com/package/@zkpassport/sdk).
-It is the **only** component that creates and verifies real zkPassport
-(Noir / UltraHonk) proofs. The Python broker and skill call it over HTTP
-because the SDK and its `@aztec/bb.js` verifier are Node-only.
+> **Migration note.** This directory will be renamed `packages/self-bridge` when the
+> code lands (see `SELF_MIGRATION.md`). It currently still reads `zkpassport-bridge`
+> on disk; this README describes the **target** Self design that replaces it.
+
+A small Node sidecar that wraps [`@selfxyz/core`](https://www.npmjs.com/package/@selfxyz/core)
+(verification) and `@selfxyz/qrcode` / `SelfAppBuilder` (request creation).
+It is the **only** component that creates and verifies real Self
+zk-SNARK proofs. The Python broker and skill call it over HTTP because the
+Self SDK is Node-only.
 
 ## Why it exists
 
-zkPassport proofs are UltraHonk and verified with Aztec's Barretenberg. There
-is no pure-Python verifier, so the broker delegates the cryptographic check to
-this service while keeping all the structural/binding checks in Python.
+Self proofs are verified with `@selfxyz/core`'s `SelfBackendVerifier`, which is
+Node-only — there is no pure-Python verifier. So the broker delegates the
+cryptographic check to this service while keeping all the structural/binding
+checks (agent-key bind, scope, nullifier↔unique_identifier, predicate
+re-derivation) in Python.
+
+Verification is **off-chain**: `SelfBackendVerifier` runs entirely on this
+backend and needs **no Celo RPC** at runtime. Trust assumption: the proof is
+only as trustworthy as this bridge's pinned verification keys.
+
+## Transport model (differs from zkPassport)
+
+zkPassport relayed the finished proof back through its own request channel.
+Self instead has the **mobile app POST the proof directly to the `endpoint`**
+configured in the SelfApp. So this bridge *is* that endpoint: it exposes a
+callback the Self app calls, verifies the submission, and stores the result for
+the skill to poll.
 
 ## Endpoints
 
 | Method | Path             | Used by | Purpose |
 |--------|------------------|---------|---------|
 | `GET`  | `/healthz`       | infra   | liveness + effective config |
-| `POST` | `/requests`      | skill   | create a zkPassport request bound to an agent key; returns the QR `url` |
-| `GET`  | `/requests/:id`  | skill   | poll for the relayed proof; returns the verifiable `bundle` |
+| `POST` | `/requests`      | skill   | create Self request(s) bound to an agent key; returns QR/universal-link `urls` |
+| `GET`  | `/requests/:id`  | skill   | poll for the relayed + verified proof(s); returns the verifiable `bundle`(s) |
+| `POST` | `/callback`      | Self app| **the SelfApp `endpoint`** — receives a proof, verifies it, stores the result |
 | `POST` | `/verify`        | broker  | stateless re-verification of a stored bundle |
 
 ### `POST /requests`
 ```json
-{ "agentKey": "<base64 Ed25519 pubkey>", "profile": "eu-adult" }
+{ "agentKey": "<base64 Ed25519 pubkey>", "profile": "standard" }
 ```
-→ `{ "requestId": "...", "url": "https://zkpassport.id/r?..." }`
+→ `{ "requestId": "...", "urls": ["https://...", "..."] }`
 
-Render `url` as a QR. The phone (a real passport, or a **mock passport** in
-`devMode`) scans it; the proof is relayed back over the zkPassport bridge.
+Render each `url` as a QR in turn. The `standard` profile emits one request per
+age threshold `[18, 25, 35, 50, 65]`, all under the same `scope` so they share
+one nullifier (§8.3 of ARCHITECTURE.md). `minimal` emits only the `18+` request.
+`agentKey` is set as `userDefinedData` (the in-proof agent-key bind).
 
 ### `GET /requests/:id`
-→ `{ status, verified, uniqueIdentifier, disclosed, bundle }` once
-`status === "complete"`. `bundle = { version, proofs, query, queryResult, scope }`
-is what the skill embeds in `DelegationToken.zkpassport_proof`.
+→ `{ status, verified, uniqueIdentifier, disclosed, boundAgentKey, bundles }`
+once all expected proofs are `complete`. Each `bundle =
+{ attestationId, proof, publicSignals, userContextData }` is what the skill
+embeds in `DelegationToken.self_proofs[]`. `disclosed` carries the raw
+`nationality` and the `olderThan` boolean per bundle; the skill buckets these
+into `region` / `age_band`.
 
 ### `POST /verify`
 ```json
-{ "proofs": [...], "query": {...}, "queryResult": {...} }
+{ "attestationId": 1, "proof": {...}, "publicSignals": [...], "userContextData": "0x..." }
 ```
-→ `{ verified, uniqueIdentifier, disclosed, boundAgentKey, queryResultErrors }`.
+→ `{ verified, uniqueIdentifier, disclosed, boundAgentKey }`.
 
-`query` is the **original query** (it carries the `custom_data` agent-key bind).
-A tampered query, or a proof bound to a different agent key, fails here.
+A tampered `userContextData` (agent-key bind), wrong scope, or invalid proof
+fails here. The broker re-derives `region`/`age_band` from `disclosed` and never
+trusts the token's stored predicates.
 
 ## Config (env)
 
 | Var | Default | Meaning |
 |-----|---------|---------|
-| `ZKPASSPORT_DOMAIN` | `hearme.network` | domain passed to `new ZKPassport()`; part of the nullifier |
-| `ZKPASSPORT_SCOPE` | `v1` | request scope; part of the nullifier |
-| `ZKPASSPORT_DEV_MODE` | `1` | `1` accepts **mock-passport** proofs (testing); `0` requires a real passport |
-| `ZKPASSPORT_VALIDITY_SECONDS` | ~95 days | proof freshness window (must exceed the DelegationToken TTL) |
-| `ZKPASSPORT_WRITING_DIR` | `/tmp` | where `@aztec/bb.js` writes CRS/artifacts during verify |
+| `SELF_SCOPE` | `hearme-v1` | application scope passed to `SelfAppBuilder` / `SelfBackendVerifier`; **part of the nullifier** (≤31 ASCII) |
+| `SELF_ENDPOINT` | — | public URL of this bridge's `/callback`; must match the SelfApp `endpoint` |
+| `SELF_ENDPOINT_TYPE` | `staging_https` | `staging_https` (testnet) or `https` (production) |
+| `SELF_MOCK_PASSPORT` | `1` | `1` = staging/Celo Sepolia, accepts **mock-passport** proofs (testing); `0` = mainnet, requires a real passport |
+| `SELF_ALLOWED_IDS` | `passport` | accepted attestation types (e.g. `passport`, `eu_id_card`) |
+| `SELF_AGE_THRESHOLDS` | `18,25,35,50,65` | the `older-than` ladder for the `standard` profile |
 | `PORT` | `8787` | HTTP port |
 
 ## Run
-
-Requires **Node >= 22** (a `@zkpassport/sdk` dependency uses ESM directory
-imports unsupported on older Node).
 
 ```sh
 npm install
@@ -65,12 +89,12 @@ npm start            # node src/server.js
 npm test             # node --test (network-free smoke tests)
 ```
 
+> Pin `@selfxyz/core` (experimental SDK) and confirm the supported Node version
+> during implementation.
+
 ## Testing without a real passport
 
-Set `ZKPASSPORT_DEV_MODE=1`. Install the zkPassport app, create a **mock
-passport** (tap 5× on the passport button on the first screen), and scan the QR
-from `/requests`. Mock-nullifier proofs verify **only** in dev mode — flip
-`ZKPASSPORT_DEV_MODE=0` and the same proof is rejected, which is the proof that
-real SNARK verification is in force.
-
-> `@zkpassport/sdk` is experimental and unaudited — the version is pinned.
+Set `SELF_MOCK_PASSPORT=1` (staging). In the Self app, create a **mock passport**
+(tap the passport button 5×) and scan the QR from `/requests`. Mock proofs verify
+**only** in staging — flip `SELF_MOCK_PASSPORT=0` (mainnet) and the same proof is
+rejected, which is the proof that real SNARK verification is in force.

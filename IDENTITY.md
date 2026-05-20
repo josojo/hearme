@@ -1,6 +1,8 @@
-# Hearme Identity Model — zkPassport and Self.xyz
+# Hearme Identity Model — Self (self.xyz)
 
 > Identity is the foundation of Hearme. Without a credible "one human, one voice" guarantee, every aggregate signal the platform produces is worthless.
+
+> **Decision (2026-05):** Hearme's proof-of-personhood is built on **Self ([self.xyz](https://self.xyz))**, the single identity provider. An earlier design used **zkPassport**; we switched after weighing adoption and longevity (Self: 8–15M users, Google Cloud / Opera / Celo backing; zkPassport: niche, "not production-ready for critical apps" per Safe research) *and* confirming Self's SDK preserves Hearme's three non-negotiables — off-chain verification with no Celo RPC, in-proof agent-key binding, and a stable per-scope nullifier. zkPassport is retained below only as **alternatives-considered** context. The concrete wire format and flow live in `ARCHITECTURE.md` §8; the code migration plan in `SELF_MIGRATION.md`.
 
 ## The Problem
 
@@ -13,7 +15,7 @@ Both fail for the same reason: if the *credential* is what grants a vote, anyone
 
 The fix is architectural: **the vote belongs to a Hearme identity, and a Hearme identity can only be created by presenting a unique-personhood proof at registration.** Other credentials (X, GitHub, ENS) can be attached later as reputation metadata, but they never create a new voting identity.
 
-This document describes how **zkPassport** and **Self.xyz** are used as the unique-personhood proofs that gate Hearme account creation.
+This document describes how **Self** is used as the unique-personhood proof that gates Hearme account creation (and why zkPassport was considered and dropped).
 
 
 ---
@@ -46,88 +48,52 @@ Passport-based ZK is the strongest currently-deployable option for global covera
 
 ---
 
-## zkPassport
+## Self (the chosen provider)
 
-zkPassport is an open-source SDK and mobile app that lets a user scan their passport's NFC chip with their phone and generate zero-knowledge proofs about its contents.
+Self ([self.xyz](https://self.xyz), formerly OpenPassport, acquired by Self Labs in Feb 2025) is an open-source, passport-based identity protocol in the Celo ecosystem. The user scans their passport/ID NFC chip with the Self app and generates zk-SNARK proofs about its contents. As of 2026 it reports 8–15M users and is integrated by Google Cloud and Opera — the adoption and longevity that motivated the switch.
 
 **What it proves:**
-- The passport is signed by a real CSCA listed in the ICAO directory.
-- The passport has not expired.
-- Selectively disclosed attributes: nationality, age bracket, etc. — the user chooses what to reveal.
-- A **scope-bound nullifier**: a deterministic value derived from the passport identity *and* the verifying application's scope (e.g., `"hearme"`), used to prevent the same passport from registering twice in the same app.
+- The document is signed by a real CSCA in the ICAO directory and has not expired.
+- Selectively disclosed attributes: nationality, an `older-than-N` age threshold, gender, OFAC sanctions non-membership — the user/app chooses which.
+- A **scope-bound nullifier**: a deterministic, *unique-per-user-per-scope* value. Under Hearme's scope `"hearme-v1"` the same passport always yields the same nullifier, which is Hearme's `unique_identifier`.
 
-**What it does not reveal:**
-- The passport number.
-- The holder's name.
-- The holder's exact date of birth (unless they choose to disclose it).
-- The holder's photo.
+**What it does not reveal:** passport number, name, photo, and — in Hearme's configuration — exact date of birth (we use age *thresholds*, never DOB; see below).
 
-**How Hearme uses it:**
+**Why Self clears Hearme's three non-negotiables:**
 
-1. User opens Hearme registration, chooses "verify with passport (zkPassport)."
-2. Hearme presents a QR code containing the Hearme app scope and the requested disclosures (e.g., country, age ≥ 16).
-3. User scans the QR code with the zkPassport mobile app, taps their passport to their phone's NFC reader.
-4. The zkPassport app generates a proof locally on the device.
-5. The proof is submitted to Hearme's verifier. Hearme checks:
-   - The proof is valid against the ICAO root keys.
-   - The scope matches `"hearme"`.
-   - The nullifier has not been seen before in Hearme's nullifier registry.
-6. If valid and unique, a Hearme identity is created, bound to the nullifier. The disclosed attributes (country, age bracket) are stored as the identity's demographic metadata.
+| Requirement | How Self satisfies it |
+|---|---|
+| **Off-chain verification, no Celo RPC at runtime** | `@selfxyz/core`'s `SelfBackendVerifier.verify()` runs entirely on our Node backend (the self-bridge). Trust assumption: "users trust your backend verifies correctly." |
+| **Bind the agent key into the proof** | `userDefinedData` (hex) carries the 32-byte Ed25519 agent key; the proof commits to it via `userContextData`. The broker checks the returned `userDefinedData` equals the bound agent key — a tampered binding fails verification. |
+| **Stable per-scope unique identifier** | The nullifier is `unique-per-user-per-scope`; `scope="hearme-v1"` gives one stable identifier per passport across all Hearme answers. |
 
-The nullifier is the load-bearing piece. Because it is deterministic in `(passport, scope)`, the same passport scanned twice produces the same nullifier — and Hearme rejects the second registration.
+**How Hearme uses it (registration):**
 
+1. User installs the Hearme skill; it generates an Ed25519 `agent_key`.
+2. The self-bridge builds SelfApp request(s) — `scope="hearme-v1"`, `endpoint=<bridge callback>`, `userDefinedData=hex(agent_key)`, disclosures `{nationality, minimumAge}` — and returns universal-link/QR URLs.
+3. User scans with the Self app, taps their passport. The Self app **POSTs the proof to the bridge endpoint** (Self's transport; the app calls your backend directly).
+4. The bridge runs `SelfBackendVerifier.verify()`, checks the nullifier is unseen in Hearme's registry and that `userDefinedData == agent_key`.
+5. If valid and unique, a Hearme identity is created, bound to the nullifier. Disclosed attributes are **bucketed** (below) into demographic metadata; the raw values are not persisted.
 
----
+**Demographic disclosure — how Hearme reconstructs `age_band` and `region`.** Self has no native "5-year band" or "region" predicate, so Hearme derives both:
 
-## Self.xyz
+- **Region** ← disclosed `nationality` (ISO-3166 country) → mapped to `EU` / continent and **bucketed before storage**.
+- **Age band** ← a **multi-threshold ladder**: at install the user runs several `older-than` proofs at thresholds `[18, 25, 35, 50, 65]`, all under `scope="hearme-v1"` so they share one nullifier. The set of passing thresholds reconstructs a band (e.g. `older_than(35)=T ∧ older_than(50)=F → "35-49"`). **Exact DOB is never disclosed.** Only the `18+` proof is required; the finer ones are optional (a user who skips them gets `age_band="18+"`).
 
-Self.xyz (Self Protocol) is a similar passport-based identity system developed in the Celo ecosystem. It uses the same underlying technology — passport NFC + zk-SNARKs — and provides analogous guarantees, with a few different design choices.
+The nullifier is the load-bearing piece: deterministic in `(passport, scope)`, so the same passport scanned twice produces the same nullifier — and Hearme rejects the second registration.
 
-**What it offers:**
-- Passport NFC scanning via a self-custodial mobile app.
-- ZK proofs of nationality, age, and OFAC sanctions-list non-membership.
-- Per-app nullifiers for Sybil resistance.
-- Smart-contract verifiers on Celo, with cross-chain support planned/available.
-- A free tier suitable for permissionless apps.
-
-**How Hearme uses it:**
-
-The flow mirrors zkPassport:
-
-1. User chooses "verify with passport (Self)."
-2. Hearme presents a Self verification request with the Hearme scope and the attributes to disclose.
-3. User completes the flow in the Self app.
-4. Hearme verifies the proof on-chain or via the Self SDK, checks the nullifier against its registry, and creates the identity.
-
-**Why offer both:**
-- Different passports may be better supported by one SDK than the other (chip variants, CSCA coverage, regional differences).
-- Different user-experience preferences.
-- Resilience: if one system has downtime or a vulnerability, the other remains available.
-- Avoiding a single-vendor dependency, which is itself a legitimacy risk for a global platform.
+**Testing without a real passport.** The Self app generates a mock passport (tap the passport button 5×). Mock proofs verify **only** with `SELF_MOCK_PASSPORT=1` (staging / Celo Sepolia + staging endpoints); flip it to `0` (mainnet) and the same mock proof is rejected — which is the proof that real SNARK verification is in force.
 
 
 ---
 
-## The Cross-System Deduplication Problem
+## Why a single provider (not zkPassport, and not both)
 
-Offering both zkPassport and Self.xyz creates a subtle attack surface: **the same passport, used in both systems, will produce two different nullifiers** (because each system derives nullifiers using its own scheme). A motivated user could register one Hearme identity via zkPassport and a second via Self.xyz, with the same physical passport.
+We deliberately ship **one** personhood provider.
 
-This is a real concern. Options to mitigate:
+**Why not zkPassport.** It was the prior choice (its nullifier mapped cleanly onto `unique_identifier` and `fast` mode verified locally). But it is niche — Safe's research calls it "not production-ready for critical applications" — and a small project being abandoned would break Hearme's identity layer. Self preserves the same three architectural wins while bringing materially more adoption, funding (Google Cloud / Opera / Celo), and document coverage.
 
-**Option A — Shared nullifier derivation.**
-Both systems publish a nullifier derived from a canonical passport identifier (e.g., `hash(DG1 || "hearme")`, where DG1 is the standardized machine-readable zone of the passport). If both SDKs cooperate on this scheme, the same passport produces the *same* Hearme nullifier through either path, and Hearme's nullifier registry deduplicates across systems.
-
-This is the right long-term answer. It requires coordination with both projects, but the cryptographic primitives already exist — both already extract DG1 internally. Hearme's onboarding milestone should include reaching out to both teams to standardize a common Hearme-scoped nullifier derivation.
-
-**Option B — Single-system enforcement.**
-Designate one of the two as canonical for any given passport-country pair. For example: passports from countries with strong Self.xyz coverage default to Self; everything else falls back to zkPassport. Users do not get to pick.
-
-Reduces flexibility, but eliminates the duplication path entirely.
-
-**Option C — Accept the marginal duplication risk.**
-A user who wants to double-vote must (a) own a valid passport, (b) install and complete *both* mobile flows, (c) accept that each flow links a Hearme identity to a specific demographic disclosure. The economic and friction cost of doing this for one extra vote is high. For small-stake questions, this is tolerable; for high-stake political signals, it is not.
-
-**Recommended starting point:** ship with Option B (single system per passport country, with a documented fallback path), and pursue Option A as a roadmap item once both SDKs and Hearme are in production.
+**Why not run both.** Offering two providers reintroduces a cross-system Sybil hole: the *same passport* yields *different* nullifiers under different SDKs, so one person could register twice (once per provider). Closing that needs either a shared canonical nullifier derivation (cross-project coordination, not available today) or a single-provider-per-country rule (operational complexity). A single provider eliminates the hole by construction. If Self ever needs a fallback, the clean path is to add a second provider *together with* a shared `hash(DG1 || "hearme")`-style nullifier so both dedup against one registry — a roadmap item, not v0.
 
 
 ---
@@ -136,8 +102,8 @@ A user who wants to double-vote must (a) own a valid passport, (b) install and c
 
 After successful passport verification, a Hearme identity consists of:
 
-- **Nullifier** — the unique, scope-bound identifier. Used to prevent re-registration. Never displayed.
-- **Demographic disclosures** — country of issuance, age bracket. Used for the regional/demographic breakdowns shown on aggregate results. Disclosed only at the granularity the user chose during registration.
+- **Nullifier** — the Self `unique-per-user-per-scope` identifier (scope `"hearme-v1"`). Used to prevent re-registration. Never displayed.
+- **Demographic disclosures** — `region` (bucketed from disclosed nationality) and `age_band` (reconstructed from the older-than threshold ladder). Used for the regional/demographic breakdowns on aggregate results. Stored only in bucketed form; the raw country and the exact age are not persisted (DOB is never disclosed at all).
 - **Reputation stamps** (optional, attached later) — X account, GitHub, ENS, Lens, prior Hearme participation. These never create new voting rights; they only feed a reputation score that may be displayed alongside aggregates or used for weighted sampling.
 - **Agent binding** — the user's personal AI agent, authorized to answer on their behalf. Revocable.
 - **Public key** — for signing votes and receiving payouts. The key is generated locally, never linked back to the passport.
@@ -155,9 +121,13 @@ After successful passport verification, a Hearme identity consists of:
 
 4. **State-level attacks.** A government with control over its CSCA could issue fake passports and create fake Hearme identities at scale. Mitigations: monitor per-country registration rates, flag anomalies, optionally weight or cap per-country participation in any single question.
 
-5. **Cross-system duplication.** As discussed above. Mitigated by shared nullifier derivation in the long term.
+5. **Off-chain verification trusts the bridge.** Self's `SelfBackendVerifier` runs on our backend and does **not** consult Celo's live identity registry; an identity revoked on-chain is not reflected. Hearme's own nullifier registry is the operative Sybil control, so this is acceptable, but it means the bridge's verification keys and `@selfxyz/core` version are trust-critical (pinned, and a compromised/buggy bridge could accept bad proofs).
 
-6. **Privacy of demographic disclosures.** Even age bracket + country can be deanonymizing in small populations. For low-population countries or rare demographic intersections, Hearme should aggregate or suppress breakdowns below a minimum cohort size.
+6. **Single-provider dependency.** With one provider, a Self outage or critical vulnerability stalls onboarding (steady-state answering is unaffected — the phone isn't a hot dependency, ARCHITECTURE §1.13). Adding a second provider is possible later but only with a shared nullifier derivation (see "Why a single provider").
+
+7. **Minimization in transit.** Self discloses the *raw* nationality inside the proof; because the broker re-verifies per envelope, the raw country reaches the broker each time even though only `region` is stored. The verify-once + session-credential redesign (ARCHITECTURE §13) closes this.
+
+8. **Privacy of demographic disclosures.** Even age band + region can be deanonymizing in small populations. For low-population regions or rare demographic intersections, Hearme should aggregate or suppress breakdowns below a minimum cohort size.
 
 
 ---

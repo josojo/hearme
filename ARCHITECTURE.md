@@ -5,7 +5,9 @@ Three components wired together:
 2. **`hearme-broker`** — Python service that dispatches questions to agents, verifies returned envelopes, and is the only writer to the answers table.
 3. **`hearme-skill`** — Python skill that runs inside a user's Hermes Agent and answers questions on their behalf.
 
-Plus a shared Postgres database, and the user's phone (running ZKPassport) which appears only at install/refresh time.
+Plus a shared Postgres database, and the user's phone (running the **Self** app, [self.xyz](https://self.xyz)) which appears only at install/refresh time.
+
+> **Identity provider: Self (self.xyz).** Hearme's proof-of-personhood layer is built on Self — passport/national-ID NFC + zk-SNARKs, verified **off-chain** on our own backend with no Celo RPC dependency. This replaced an earlier zkPassport integration; see `IDENTITY.md` for the why and §8 for the concrete flow.
 
 ## 1. Design principles
 
@@ -15,16 +17,18 @@ These are the non-negotiables. Every component below exists to serve one of them
 The agent answers *on behalf of* the user. If users ever feel surveilled, Hearme dies. The skill must expose a sharp, legible policy surface (topics, askers, daily caps, payment floor) and never silently drift from it. Default to off; opt-in per category.
 
 ### 1.2 Personal-data minimization at the boundary
-The agent reasons over rich personal memory locally (or with help of a model provider). Only the **answer itself** plus the user's **DelegationToken** (a pre-issued bundle of zkPassport predicate proofs + a stable `uniqueIdentifier`) crosses the device + model boundary. Raw facts, chain-of-thought, source memories, raw passport fields — never.
+The agent reasons over rich personal memory locally (or with help of a model provider). Only the **answer itself** plus the user's **DelegationToken** (a pre-issued bundle of Self disclosure proofs + a stable `uniqueIdentifier`) crosses the device + model boundary. Raw facts, chain-of-thought, source memories, raw passport fields — never.
+
+> **Minimization caveat (transit vs storage).** Self discloses the *raw* attribute inside the proof (the actual nationality country code, the older-than booleans), not a pre-bucketed predicate. Hearme **stores** only the bucketed form (`region`, `age_band` — §8.3), but because the broker re-verifies the proof on every envelope (§5), the raw country travels to the broker each time. Storage honors §1.2; transit does not yet. The clean fix is the verify-once-at-registration + broker-issued session credential redesign in §11/§13 — prioritize it if minimization-in-transit matters.
 
 ### 1.3 Predicate disclosure, fixed at install
 Demographic disclosure is decided **once**, at install, when the user picks a disclosure level on the phone (e.g. age band, region). The phone bakes the chosen predicates into the DelegationToken. Every answer reuses the same predicate set; askers do **not** negotiate predicates per question. If an asker needs finer slicing, they slice post-hoc on the aggregate, not by demanding new disclosures from the user.
 
 ### 1.4 Sybil resistance via stable scoped uniqueness; linkability is bounded and named
-The DelegationToken's `uniqueIdentifier` is scoped to `(domain="hearme.network", scope="v1")` — so the same user produces the same identifier across every Hearme answer. The broker uses this for one-answer-per-`(question_id, uniqueIdentifier)` enforcement and for per-user honeypot scoring. This means **the broker can link a user's answers to each other** within Hearme. This is a deliberate v0 tradeoff: it buys "zero time cost per question" (no phone round-trip), and the broker is contractually bound to publish only aggregates. Epoch-rotated scopes (so identifiers rotate weekly/monthly) are a v0.2 upgrade documented in §13.
+The DelegationToken's `uniqueIdentifier` is the **Self nullifier** under the single scope `"hearme-v1"` (Self collapses domain + scope into one ≤31-ASCII scope string; the nullifier is `unique-per-user-per-scope`) — so the same passport produces the same identifier across every Hearme answer. The broker uses this for one-answer-per-`(question_id, uniqueIdentifier)` enforcement and for per-user honeypot scoring. This means **the broker can link a user's answers to each other** within Hearme. This is a deliberate v0 tradeoff: it buys "zero time cost per question" (no phone round-trip), and the broker is contractually bound to publish only aggregates. Epoch-rotated scopes (so identifiers rotate weekly/monthly) are a v0.2 upgrade documented in §13.
 
 ### 1.5 Verify all, trust none (broker side)
-The broker treats every envelope as potentially malicious. It verifies the phone's signature on the DelegationToken, the token's expiry, the agent's per-question signature, the request linkage, and the uniqueness constraint — every time, every envelope. The frontend never sees raw envelopes; it sees only verified writes.
+The broker treats every envelope as potentially malicious. It re-verifies the Self proof(s) carried in the DelegationToken (real SNARK check via the **self-bridge**), the token's expiry, the agent's per-question signature, the request linkage, and the uniqueness constraint — every time, every envelope. There is no phone signature on the token; integrity comes from the SNARK. The frontend never sees raw envelopes; it sees only verified writes.
 
 ### 1.6 Coercion resistance
 The skill must never emit a side-channel artifact (signed receipt, plaintext log shipped off-device, screenshot to cloud) that lets a third party prove how the user answered. The user gets a local audit trail. Nobody else does.
@@ -48,7 +52,7 @@ Hermes supports 8 memory backends. The skill talks through Hermes's memory abstr
 The user can preview, edit, or veto any answer before submission. Every submitted answer is revocable post-hoc within the protocol's revocation window.
 
 ### 1.13 Phone is the enrollment device, not a hot dependency
-The user's phone (running the ZKPassport app) is touched at exactly three moments: **install**, **refresh** (every 90 days), and **revocation**. In steady state, the phone is never contacted.
+The user's phone (running the Self app) is touched at exactly three moments: **install**, **refresh** (every 90 days), and **revocation**. Because age granularity uses a multi-threshold scheme (§8.3), *install* may run several quick Self proofs back-to-back; this cost is paid once and isolated to these three moments. In steady state, the phone is never contacted.
 
 ### 1.14 Cheap relevance gating before generation
 
@@ -94,7 +98,7 @@ The user's phone (running the ZKPassport app) is touched at exactly three moment
                                                   │ install + refresh only
                                                   │
                                      ┌────────────┴───────────┐
-                                     │  User phone — ZKPP app │
+                                     │  User phone — Self app │
                                      └────────────────────────┘
 ```
 
@@ -242,8 +246,10 @@ For v0, simple HTTP polling is fine. Long-poll or WebSocket is a v0.2 transport 
 
 ```
 parse (pydantic)
-  → verify the zkPassport proof (real SNARK via the zkpassport-bridge) + bindings
-    (agent_key via custom_data, scope, nullifier ↔ unique_identifier, predicates)
+  → verify the Self proof(s) (real SNARK via the self-bridge → @selfxyz/core) + bindings
+    (agent_key via userDefinedData, scope, nullifier ↔ unique_identifier;
+     re-derive region from disclosed nationality and age_band from the older-than booleans,
+     and confirm they match the token's disclosed_predicates)
   → check token.expires_at > now()
   → check token.delegation_hash not in revocations
   → recompute expected delegation_hash and compare
@@ -275,9 +281,9 @@ hearme-broker/
 │   │   └── envelopes.py          # POST /v1/envelopes
 │   ├── verify/
 │   │   ├── __init__.py
-│   │   ├── delegation.py         # expiry + zkPassport verification + revocation
-│   │   ├── zkpassport.py         # bindings + real SNARK check (via bridge)
-│   │   ├── bridge_client.py      # HTTP client for the zkpassport-bridge
+│   │   ├── delegation.py         # expiry + Self verification + revocation
+│   │   ├── self_identity.py      # bindings + real SNARK check (via bridge) + predicate re-derivation
+│   │   ├── bridge_client.py      # HTTP client for the self-bridge
 │   │   └── envelope.py           # agent signature + linkage
 │   ├── db/
 │   │   ├── client.py             # asyncpg pool
@@ -288,6 +294,7 @@ hearme-broker/
 └── tests/
     ├── test_verify_delegation.py
     ├── test_verify_envelope.py
+    ├── test_predicate_derivation.py   # country→region, thresholds→age_band
     ├── test_uniqueness.py
     └── test_aggregate_recompute.py
 ```
@@ -313,9 +320,9 @@ hearme-broker/
 └─────────────────────────────────────────────────────────┘
                  ▲
                  │ rare: install + refresh + revoke
-                 │
+                 │ (install = N quick Self proofs, §8.3)
 ┌────────────────┴───────────────────────────────────────┐
-│  User phone — ZKPassport app                           │
+│  User phone — Self app                                  │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -443,37 +450,59 @@ The cheap gate. Sits between Policy and Persona. Exists to satisfy §1.14: most 
 
 ## 8. Onboarding — the DelegationToken handoff
 
-The only time the phone produces cryptographic material for the agent.
+The only time the phone produces cryptographic material for the agent. Built on **Self** ([self.xyz](https://self.xyz)): passport/ID NFC + zk-SNARK, with **off-chain** verification on the self-bridge (`@selfxyz/core`'s `SelfBackendVerifier`) — no Celo RPC at runtime.
+
+### 8.0 Why a bridge sidecar (still)
+
+`@selfxyz/core` (verify) and `@selfxyz/qrcode` / `SelfAppBuilder` (request creation) are Node-only; there is no pure-Python verifier. So the Python broker and skill delegate to **`packages/self-bridge`** over HTTP, exactly as the prior design did with zkPassport. The bridge does the cryptography; Python keeps every binding/structural check.
+
+**Transport difference from zkPassport.** zkPassport relayed the finished proof back through its own request channel. Self instead has the **mobile app POST the proof directly to the `endpoint`** configured in the SelfApp — so the self-bridge *is* that endpoint (a callback webhook). The skill then polls the bridge for completion.
 
 ### 8.1 Flow
 
 1. User installs the `hearme` Hermes skill. The skill generates an Ed25519 keypair → `agent_key`.
-2. The skill asks the **zkpassport-bridge** to create a zkPassport request bound to `agent_key` (via the SDK's `custom_data` bind) and renders the returned `url` as a QR.
-3. User opens the ZKPassport app, scans the QR, approves the disclosure. The app produces a real Noir/UltraHonk proof and relays it back to the bridge.
-4. The skill polls the bridge, then assembles the **DelegationToken** wrapping the verifiable bundle:
+2. The skill asks the **self-bridge** `POST /requests {agentKey, profile}`. The bridge builds one or more SelfApp configs via `SelfAppBuilder` with:
+   - `scope = "hearme-v1"` (≤31 ASCII; this *is* the nullifier scope),
+   - `endpoint = <self-bridge callback URL>`, `endpointType = staging_https | https`,
+   - `userId` = a per-request id, `userDefinedData = hex(agent_key)` (32-byte Ed25519 pubkey → 64 hex chars; **this is the agent-key bind** — the proof commits to it via `userContextData`),
+   - disclosures per profile (§8.3): `nationality: true`, and a `minimumAge` threshold.
+   It returns `{ requestId, urls: [...] }` (one universal-link/QR per threshold proof).
+3. The skill renders each `url` as a QR in turn. User opens the **Self app**, taps their passport (a **mock passport** in staging — §12), approves. The Self app **POSTs the proof to the bridge `endpoint`**.
+4. The bridge runs `SelfBackendVerifier.verify(...)` per submission, stores each `VerificationResult` under `requestId`. The skill polls `GET /requests/:id` until all expected proofs are `complete`, receiving for each: `nullifier` (= `unique_identifier`, identical across the threshold proofs since scope+passport are constant), disclosed `nationality`, the `olderThan` boolean, and `userDefinedData` (= `agent_key`).
+5. The skill derives the bucketed predicates locally — `region = derive(nationality)`, `age_band = bucket(olderThan booleans)` (§8.3) — and assembles the **DelegationToken**:
    ```
    DelegationToken = {
-     zkpassport_proof,         # base64(canonical_json({proofs, query, queryResult, scope}))
-     domain = "hearme.network",
-     scope = "v1",
-     unique_identifier,        # zkPassport nullifier = Poseidon2(id, domain, scope)
-     disclosed_predicates,     # e.g. {age_band: "18+", region: "EU"}
-     agent_key,                # bound in-circuit via custom_data; the proof attests it speaks for unique_identifier
+     version = 2,
+     self_proofs,              # array; one verifiable bundle per threshold proof,
+                               #   each = base64(canonical_json({attestationId, proof,
+                               #                  publicSignals, userContextData}))
+     scope = "hearme-v1",
+     unique_identifier,        # Self nullifier (shared by all self_proofs)
+     disclosed_predicates,     # bucketed: {age_band: "35-49", region: "EU"}
+     agent_key,                # = userDefinedData; the proof attests it speaks for unique_identifier
      issued_at,
      expires_at,               # default issued_at + 90 days
    }
    ```
-   No signature wraps the bundle: integrity comes from the SNARK, which the broker re-verifies.
-5. Skill encrypts and stores at `~/.hermes/hearme/delegation.token`. Done.
+   No signature wraps the bundle: integrity comes from the SNARKs, which the broker re-verifies (and from which it re-derives `disclosed_predicates`, never trusting the token's copy).
+6. Skill encrypts and stores at `~/.hermes/hearme/delegation.token`. Done.
+
+**Graceful degradation.** Only the `18+` proof is required (registration gate). The finer thresholds (§8.3) are optional; a user who declines the extra scans gets `age_band = "18+"` and still participates — they just don't contribute to generational breakdowns.
 
 ### 8.2 Refresh
-7 days before expiry, UI nudges the user. User opens ZKPassport app, approves, phone re-issues, agent stores new token. If ignored, agent stops answering and surfaces a weekly nudge.
+7 days before expiry, UI nudges the user. User opens the Self app, re-runs the proof set, agent stores the new token. If ignored, agent stops answering and surfaces a weekly nudge.
 
 ### 8.3 Disclosure profiles
-Fixed bundles, picked once on the phone:
-- **Minimal**: `{age_band: "18+/under-18", region: "EU/non-EU"}`
-- **Standard**: `{age_band: 5-year-bucket, region: continent, gender: optional}`
-- **Granular**: `{age_band: 5-year-bucket, country: ISO-3166, gender: optional, urban_rural: optional}`
+
+Self discloses a *single* `minimumAge` boolean (or full DOB) per proof and the *raw* nationality — it has no native 5-year-band or "region" predicate. Hearme reconstructs both:
+
+- **Region** ← disclosed `nationality` (ISO-3166 country), mapped to a region (`EU` / continent) and **bucketed before storage**. The raw country is in the proof (see §1.2 transit caveat) but only `region` is persisted.
+- **Age band** ← a **multi-threshold ladder**: at install the skill requests several `older-than` proofs at thresholds `[18, 25, 35, 50, 65]` (configurable), all under `scope="hearme-v1"` so they share one nullifier. The set of passing thresholds reconstructs a band, e.g. `older_than(35)=T ∧ older_than(50)=F → "35-49"`. **Exact DOB is never disclosed.**
+
+Profiles (picked once on the phone):
+- **Minimal**: `{age_band: "18+", region: "EU/non-EU"}` — one proof.
+- **Standard** (default): `{age_band: 5-band ladder, region: continent}` — full threshold set.
+- *(Gender and finer geography are intentionally omitted in v0 to respect §1.2; add later only with a clear aggregation need and cohort-size suppression — §13.)*
 
 ### 8.4 Revocation
 Phone publishes a signed revocation to the broker (`POST /v1/revocations` — out of v0 scope, but the broker has the `revocations` table ready). Broker stops accepting envelopes carrying the revoked `delegation_hash`.
@@ -483,12 +512,13 @@ Phone publishes a signed revocation to the broker (`POST /v1/revocations` — ou
 **DelegationToken** (canonical JSON, deterministic field ordering for hashing):
 ```json
 {
-  "version": 1,
-  "zkpassport_proof": "<base64 of canonical_json({proofs, query, queryResult, scope})>",
-  "domain": "hearme.network",
-  "scope": "v1",
-  "unique_identifier": "<zkPassport nullifier string>",
-  "disclosed_predicates": {"age_band": "18+", "region": "EU"},
+  "version": 2,
+  "self_proofs": [
+    "<base64 of canonical_json({attestationId, proof, publicSignals, userContextData})>"
+  ],
+  "scope": "hearme-v1",
+  "unique_identifier": "<Self nullifier string>",
+  "disclosed_predicates": {"age_band": "35-49", "region": "EU"},
   "agent_key": "<base64 32 bytes>",
   "issued_at": "2026-05-19T10:00:00Z",
   "expires_at": "2026-08-17T10:00:00Z"
@@ -517,16 +547,16 @@ Phone publishes a signed revocation to the broker (`POST /v1/revocations` — ou
 hearme/
 ├── README.md
 ├── ARCHITECTURE.md
-├── docker-compose.yml             # postgres + broker + web + zkpassport-bridge for local dev
+├── docker-compose.yml             # postgres + broker + web + self-bridge for local dev
 ├── packages/
 │   ├── web/                       # § 4 — Next.js
 │   ├── broker/                    # § 5 — Python/FastAPI
 │   ├── skill/                     # § 6-8 — Python Hermes skill
-│   ├── zkpassport-bridge/         # Node sidecar — real zkPassport request + verify
+│   ├── self-bridge/               # Node sidecar — real Self request + verify (@selfxyz/core)
 │   └── proto/                     # shared schemas (DelegationToken, Envelope, Question)
 │       ├── delegation.json        # JSON schema
 │       ├── envelope.json
-│       ├── zkpassport.json        # verifiable zkPassport bundle
+│       ├── self.json              # verifiable Self proof bundle
 │       └── question.json
 └── scripts/
     ├── dev-up.sh                  # docker-compose up + seed
@@ -588,7 +618,7 @@ Marked `# STUB:` in code and listed in each package's README under "Not yet real
 
 - **Payments.** No money flows anywhere in v0. The pitch's "fraction of a cent" is deferred to v0.3. No payment fields in the schema.
 - **Asker auth.** Display name only; anyone can post. Asker accounts and auth land in v0.2.
-- **Real zkPassport proof verification — DONE.** The broker now verifies a real Noir/UltraHonk zkPassport proof: `verify/zkpassport.py` re-runs `@zkpassport/sdk` `verify()` through the **zkpassport-bridge** (`packages/zkpassport-bridge`, a Node sidecar — there is no pure-Python UltraHonk verifier), then enforces the bindings (agent_key via `custom_data`, scope, nullifier ↔ unique_identifier, predicates) and registers the nullifier so the same passport can't bind multiple agent_keys without revocation. Mock-passport proofs verify only when the bridge runs with `devMode=1` (testing without a real passport). See `packages/proto/zkpassport.json` and `packages/broker/src/hearme_broker/verify/zkpassport.py`. *Open follow-up: re-verifying per envelope relies on a long `validity` window; a verify-once-at-registration + broker-issued session credential would avoid that.*
+- **Real Self proof verification — DESIGN (this change).** The broker verifies real Self zk-SNARK proofs: `verify/self_identity.py` re-runs `@selfxyz/core`'s `SelfBackendVerifier.verify()` through the **self-bridge** (`packages/self-bridge`, a Node sidecar — `@selfxyz/core` is Node-only), then enforces the bindings (agent_key via `userDefinedData`, scope, nullifier ↔ unique_identifier), **re-derives** `region`/`age_band` from the disclosed nationality and older-than booleans (never trusting the token's copy), and registers the nullifier so the same passport can't bind multiple agent_keys without revocation. Mock-passport proofs verify only when the bridge runs with `SELF_MOCK_PASSPORT=1` (staging / Celo Sepolia; testing without a real passport). See `packages/proto/self.json` and `packages/broker/src/hearme_broker/verify/self_identity.py`. *This section will flip to DONE once the code lands (the doc-first migration plan is `SELF_MIGRATION.md`).* **Open follow-ups:** (a) re-verifying per envelope re-ships the raw proof (and disclosed country) to the broker — a verify-once-at-registration + broker-issued session credential (§13) avoids that and closes the §1.2 transit gap; (b) Self's off-chain verifier trusts the bundled verification keys and does **not** consult Celo's live identity registry, so a Celo-side revocation is not reflected — Hearme's own nullifier registry is the operative Sybil control.
 - **Memory provider abstraction.** Skill hard-codes one provider (Mem0 or Holographic). Wire the abstraction in v0.2.
 - **Multi-channel skill UI.** Telegram only in v0.
 - **Revocation propagation.** Broker has the `revocations` table; skill respects expiry; live revocation publishing flow lands in v0.2.
@@ -609,7 +639,8 @@ Each package has its own test suite; one cross-cutting end-to-end suite at the r
 - Detail page renders aggregate results without exposing raw envelopes.
 
 ### broker — the highest-stakes suite
-- **Verify delegation** — happy path, expired token, ZK failures (proof-invalid, binding mismatches) surfaced, revoked token. The bridge call is mocked in unit tests (a deterministic fake steered by `query._test_outputs`); a live devMode verify is opt-in.
+- **Verify delegation** — happy path, expired token, ZK failures (proof-invalid, binding mismatches) surfaced, revoked token. The bridge call is mocked in unit tests (a deterministic fake returning a canned `VerificationResult`); a live `SELF_MOCK_PASSPORT=1` (staging) verify is opt-in.
+- **Predicate derivation** — `country → region` mapping and `older-than-booleans → age_band` bucketing are pure functions: table-driven tests over edge cases (boundary ages, unmapped countries, partial threshold sets → graceful `18+`). The broker must reject any envelope whose token `disclosed_predicates` disagree with what the proofs re-derive.
 - **Verify envelope** — happy path, bad agent signature, swapped `question_id`, swapped `answer`, swapped `nonce`, swapped `delegation_hash`. Each swap must reject.
 - **Uniqueness** — two envelopes from the same `unique_identifier` for the same `question_id` → second rejects via DB constraint. (Test against a real Postgres in CI.)
 - **Aggregate increment** — accepted envelopes update `total_answers` and `by_predicate` without scanning all prior envelopes.
@@ -624,7 +655,7 @@ Each package has its own test suite; one cross-cutting end-to-end suite at the r
 - **No phone contact in steady state** — across 100 simulated answers, phone bridge is called **zero** times.
 
 ### end-to-end (`/scripts/e2e.sh`)
-- Spin up postgres + broker + web + zkpassport-bridge + a skill. Onboard by scanning a mock passport (devMode), or replay a captured proof fixture via `mock-onboard.py`.
+- Spin up postgres + broker + web + self-bridge + a skill. Onboard by scanning a mock passport (`SELF_MOCK_PASSPORT=1`, staging), or replay a captured proof fixture via `mock-onboard.py`.
 - Asker posts a question via the web UI (programmatically).
 - Mock skill polls broker, answers, submits envelope.
 - Assert: envelope appears in DB, aggregate row updated, web detail page renders it.
@@ -635,7 +666,8 @@ Each package has its own test suite; one cross-cutting end-to-end suite at the r
 ## 13. Open questions
 
 - **Question dispatch transport.** v0 uses HTTP polling. Latency vs simplicity tradeoff: polling every 30s means answers arrive ~30s late. Worth it for v0; move to SSE or WebSocket in v0.2.
-- **Epoch-rotated scopes (privacy upgrade).** Replace `scope="v1"` with `scope="epoch:<N>"` where N rotates monthly. Phone issues a small batch of epoch tokens at install. Benefit: broker can no longer link a user's answers across epochs.
+- **Epoch-rotated scopes (privacy upgrade).** Replace `scope="hearme-v1"` with `scope="hearme-epoch-<N>"` where N rotates monthly (still ≤31 ASCII). Phone issues a small batch of epoch tokens at install. Benefit: broker can no longer link a user's answers across epochs. Note Self derives the nullifier from `scope`, so a new scope yields a fresh nullifier for the same passport.
+- **Verify-once + session credential (perf + minimization).** Today the broker re-verifies the Self proof(s) on every envelope, which re-ships the raw proof (and the disclosed country) each time — costly and a §1.2 transit leak. Instead: verify the proof set **once at registration**, then have the broker issue a short-lived signed **session credential** binding `(unique_identifier, agent_key, disclosed_predicates, expiry)`. Envelopes carry only the credential; the raw proof never travels again. This closes the §1.2 transit gap and removes per-envelope SNARK cost.
 - **DelegationToken storage at rest.** OS keychain, passphrase-encrypted file, or Hermes-identity-derived key? Tradeoff between usability and host-compromise resistance.
 - **Aggregate semantics for free-form answers.** v0 only aggregates by predicate (e.g., "47 EU users answered"). Semantic clustering of answer text — "65% positive sentiment about X" — is v0.2 and needs careful design to not leak identifying patterns.
 - **Frontend identity for askers.** v0 has no auth. At what scale does this become a problem (spam, abuse)? Likely sooner than we'd like.
