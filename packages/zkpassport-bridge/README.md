@@ -38,7 +38,7 @@ the skill to poll.
 | `POST` | `/requests`      | skill   | create Self request(s) bound to an agent key; returns QR/universal-link `urls` |
 | `GET`  | `/requests/:id`  | skill   | poll for the relayed + verified proof(s); returns the verifiable `bundle`(s) |
 | `POST` | `/callback`      | Self app| **the SelfApp `endpoint`** — receives a proof, verifies it, stores the result |
-| `POST` | `/verify`        | broker  | stateless re-verification of a stored bundle |
+| `POST` | `/verify`        | broker  | stateless verify of a bundle — **called once at registration** (`POST /v1/register`), never per envelope (Self proofs expire ±1 day; the broker issues its own session credential — ARCHITECTURE §5/§8) |
 
 ### `POST /requests`
 ```json
@@ -65,9 +65,11 @@ into `region` / `age_band`.
 ```
 → `{ verified, uniqueIdentifier, disclosed, boundAgentKey }`.
 
-A tampered `userContextData` (agent-key bind), wrong scope, or invalid proof
-fails here. The broker re-derives `region`/`age_band` from `disclosed` and never
-trusts the token's stored predicates.
+A tampered `userContextData` (agent-key bind), wrong scope, expired proof
+(±1 day), or invalid proof fails here. At registration the broker derives the
+authoritative `region`/`age_band` from `disclosed`, binds the nullifier, and
+mints the session credential — so this `disclosed` output is consumed once, not
+re-checked per answer.
 
 ## Config (env)
 

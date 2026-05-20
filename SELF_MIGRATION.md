@@ -1,9 +1,8 @@
 # zkPassport → Self (self.xyz) migration plan
 
 > **Status: design / docs-first.** This document is the agreed plan *before* code
-> changes. `ARCHITECTURE.md` (§8) and `IDENTITY.md` already describe the target
-> state; this file maps the concrete code work that follows. Nothing here is
-> implemented yet.
+> changes. `ARCHITECTURE.md` and `IDENTITY.md` describe the target state; this file
+> maps the concrete code work that follows. Nothing here is implemented yet.
 
 ## Why
 
@@ -15,14 +14,15 @@ non-negotiables, verified against the real docs:
 | Non-negotiable | Self mechanism | Verified |
 |---|---|---|
 | Off-chain verify, no Celo RPC at runtime | `@selfxyz/core` `SelfBackendVerifier.verify()` runs on our backend | ✅ |
-| Bind agent key into the proof | `userDefinedData` (hex), committed via `userContextData`; returned by `verify()` | ✅ |
+| Bind agent key into the proof | `userDefinedData` (variable-length `bytes`), committed via `userContextData`; returned by `verify()` | ✅ |
 | Stable per-scope unique identifier | nullifier is `unique-per-user-per-scope` | ✅ |
 
 ## Decisions locked
 
 1. **Replace zkPassport entirely.** Self is the sole personhood provider; no dual-provider path in v0.
-2. **Region** ← disclosed `nationality`, mapped to region and **bucketed before storage** (raw country not persisted).
-3. **Age** ← **multi-threshold ladder** at install (`older-than` proofs at `[18, 25, 35, 50, 65]`, shared scope ⇒ shared nullifier). **No DOB.** Only `18+` is required; finer thresholds optional → graceful fallback to `age_band="18+"`.
+2. **Region** ← disclosed `nationality`, mapped to region and **bucketed at registration** (raw country not persisted).
+3. **Age** ← **multi-threshold ladder** at install (`older-than` proofs at `[18, 25, 35, 50, 65]`, shared scope ⇒ shared nullifier). **No DOB.** Only `18+` required; finer thresholds optional → graceful fallback to `age_band="18+"`.
+4. **Verify-once-at-registration + broker-issued session credential.** **This is forced, not optional:** Self proofs expire **±1 day** (`SelfBackendVerifier` throws `InvalidTimestamp`), so the broker cannot re-verify a stored proof per envelope over a 90-day token. The broker verifies the proofs **once** at `POST /v1/register`, then issues a **broker-signed `DelegationToken`** the agent replays per answer. The raw proof never travels per answer (also removes per-envelope SNARK cost and closes the §1.2 transit gap). The `DelegationToken` is **redefined**: it is now the broker-issued credential, not a phone-side bundle of proofs.
 
 ## Old → new mapping
 
@@ -30,16 +30,20 @@ non-negotiables, verified against the real docs:
 |---|---|---|
 | Package dir | `packages/zkpassport-bridge/` | `packages/self-bridge/` |
 | Node SDK | `@zkpassport/sdk` + `@aztec/bb.js` | `@selfxyz/core` + `@selfxyz/qrcode` |
-| Broker verify module | `verify/zkpassport.py` | `verify/self_identity.py` |
-| Broker bridge client | `verify/bridge_client.py` | `verify/bridge_client.py` (repoint URL/shape) |
-| Proto schema | `packages/proto/zkpassport.json` | `packages/proto/self.json` |
-| Agent-key bind | SDK `custom_data` in `query` | `userDefinedData` (hex) in `userContextData` |
+| Broker SNARK verify | `verify/zkpassport.py` (per envelope) | `verify/self_identity.py` (**registration only**) |
+| Broker bridge client | `verify/bridge_client.py` (per envelope) | `verify/bridge_client.py` (**registration only**) |
+| Agent-key bind | SDK `custom_data` in `query` | `userDefinedData` in `userContextData` |
 | Nullifier | `Poseidon2(id, domain, scope)` | Self nullifier, `unique-per-user-per-scope` |
 | Scope | `domain="hearme.network"` + `scope="v1"` | single `scope="hearme-v1"` (≤31 ASCII) |
 | Proof relay | relayed back via SDK request channel | Self app **POSTs to bridge `endpoint`** (`/callback`) |
-| Token field | `zkpassport_proof` (single) | `self_proofs` (array; one per threshold) |
+| **Verification timing** | **per envelope** (re-verify proof) | **once at registration** (Self ±1 day window forbids per-envelope) |
+| **Per-envelope artifact** | DelegationToken embeds the raw proof(s) | DelegationToken = **broker-signed credential** (no proof) |
+| **Install→broker payload** | (none; token built client-side) | **EnrollmentBundle** `{self_proofs[], agent_key}` → `POST /v1/register` |
 | Token `version` | `1` | `2` |
 | Dev/test toggle | `ZKPASSPORT_DEV_MODE=1` | `SELF_MOCK_PASSPORT=1` (staging / Celo Sepolia) |
+| **New endpoint** | — | `POST /v1/register` |
+| **New table** | — | `registrations` (nullifier registry; see below) |
+| **New broker secret** | — | `broker_key` (Ed25519; signs the DelegationToken) |
 
 ### Env vars
 
@@ -47,11 +51,12 @@ non-negotiables, verified against the real docs:
 |---|---|
 | `ZKPASSPORT_DOMAIN`, `ZKPASSPORT_SCOPE` | `SELF_SCOPE` (=`hearme-v1`) |
 | `ZKPASSPORT_DEV_MODE` | `SELF_MOCK_PASSPORT` |
-| `ZKPASSPORT_VALIDITY_SECONDS` | (n/a — Self has no equivalent long validity window; revisit per-envelope freshness, see §13 verify-once) |
+| `ZKPASSPORT_VALIDITY_SECONDS` | **(drop)** — Self proofs are ±1 day; freshness is irrelevant after verify-once |
 | `ZKPASSPORT_WRITING_DIR` | (drop — no bb.js CRS artifacts) |
 | `HEARME_BROKER_ZKPASSPORT_BRIDGE_URL` | `HEARME_BROKER_SELF_BRIDGE_URL` |
 | `HEARME_SKILL_ZKPASSPORT_BRIDGE_URL` | `HEARME_SKILL_SELF_BRIDGE_URL` |
 | — | `SELF_ENDPOINT`, `SELF_ENDPOINT_TYPE`, `SELF_ALLOWED_IDS`, `SELF_AGE_THRESHOLDS` (new) |
+| — | `HEARME_BROKER_SIGNING_KEY` (the `broker_key`; v0 from config/secret) |
 
 ## Per-component work
 
@@ -60,55 +65,63 @@ non-negotiables, verified against the real docs:
 - `POST /requests {agentKey, profile}` → build SelfApp config(s) via `SelfAppBuilder` (scope, endpoint, `userDefinedData=hex(agentKey)`, disclosures `{nationality, minimumAge}`); return `{requestId, urls[]}` (one per threshold for `standard`).
 - `POST /callback` → **the SelfApp endpoint**: receive `{attestationId, proof, publicSignals, userContextData}`, run `SelfBackendVerifier.verify()`, store result under `requestId`, return the app-expected ack.
 - `GET /requests/:id` → return `{status, verified, uniqueIdentifier, disclosed, boundAgentKey, bundles[]}`.
-- `POST /verify` → stateless re-verify of a stored bundle.
+- `POST /verify` → stateless verify of a bundle. **Called only by the broker at registration**, not per envelope.
 - See `packages/self-bridge/README.md` (already written) for the full endpoint/env spec.
 
 ### 2. `packages/broker`
-- `verify/self_identity.py`: call bridge `/verify` per `self_proofs[]`; enforce bindings (agent_key == `userDefinedData`, scope, all proofs share one nullifier == `unique_identifier`); **re-derive** `region` (country→region) and `age_band` (older-than set→band) and **reject if they disagree with the token's `disclosed_predicates`**.
-- Add pure helpers: `country_to_region()`, `thresholds_to_age_band()`.
-- Nullifier registry: unchanged in spirit — register `unique_identifier`↔`agent_key`; reject a second agent_key for the same nullifier without revocation.
-- Repoint `bridge_client.py` to `HEARME_BROKER_SELF_BRIDGE_URL` and the new request/response shapes.
+- **`routes/register.py`** (new) → `POST /v1/register`: the registration pipeline (ARCHITECTURE §5).
+- **`verify/self_identity.py`**: call bridge `/verify` per `self_proofs[]`; enforce bindings (agent_key == `userDefinedData`, scope, all proofs share one nullifier == `unique_identifier`); **derive** `region`/`age_band` (broker is authoritative).
+- **`verify/credential.py`** (new): hold the `broker_key`; `issue(token_claims) -> broker_signature`; `verify(delegation_token)`.
+- **`verify/delegation.py`**: per-envelope only — verify `broker_signature`, expiry, and registry/revocation (`registrations` lookup). **No bridge call.**
+- Pure helpers: `country_to_region()`, `thresholds_to_age_band()`.
+- Registry: `INSERT registrations(...)` atomically; reject a second agent_key for an already-bound nullifier (Sybil); idempotent for the same agent_key (refresh).
+- `bridge_client.py` → `HEARME_BROKER_SELF_BRIDGE_URL`, new request/response shapes.
 
 ### 3. `packages/skill` (onboarding)
-- `onboarding.py`: call `/requests`, render each `url`, poll `/requests/:id` until all expected proofs complete.
-- Build `DelegationToken` v2 with `self_proofs[]`, derive bucketed `disclosed_predicates` locally, store encrypted. Graceful fallback to `18+` if user completes only the required proof.
-- `delegation.py`: load/validate v2 token.
+- `onboarding.py`: call self-bridge `/requests`, render each `url`, poll `/requests/:id` until all expected proofs complete; assemble the **EnrollmentBundle** `{self_proofs[], agent_key}`; `POST /v1/register`; store the **broker-issued DelegationToken** encrypted; discard the raw proofs. Graceful fallback to `18+`.
+- `delegation.py`: load/validate the broker-issued v2 token; treat it as opaque (don't re-derive predicates client-side).
 
 ### 4. `packages/proto`
-- Replace `zkpassport.json` with `self.json` (verifiable Self bundle: `{attestationId, proof, publicSignals, userContextData}`).
-- Update `delegation.json`: `version:2`, `self_proofs[]`, `scope`, drop `domain`/`zkpassport_proof`.
+- `enrollment.json` (new): `{self_proofs[], agent_key}`.
+- `self.json` (replaces `zkpassport.json`): verifiable Self bundle `{attestationId, proof, publicSignals, userContextData}`.
+- `delegation.json`: rewrite to the **broker-issued credential** — `version:2`, `scope`, `unique_identifier`, `disclosed_predicates`, `agent_key`, `issued_at`, `expires_at`, `broker_signature`. Drop `self_proofs`/`domain`.
 
-### 5. `docker-compose.yml`
-- Rename service `zkpassport-bridge` → `self-bridge`; update `build.dockerfile`, `container_name`, env vars (table above), and the broker/skill `depends_on` + bridge-URL env.
-- Update the header comment block and the mock-passport onboarding hint (`SELF_MOCK_PASSPORT=1`, staging).
+### 5. Database migration (`packages/web/drizzle`)
+- **New `registrations` table** (ARCHITECTURE §3): `unique_identifier PK, agent_key, disclosed_predicates JSONB, issued_at, expires_at, revoked_at`. Grant the broker role write access.
+- `envelopes` unchanged in shape (`disclosed_predicates`, `unique_identifier`, `delegation_hash` semantics carry over; `delegation_hash` now hashes the broker-issued token).
+- No row migration (v0, no production data).
 
-### 6. `scripts/`
-- `mock-onboard.py`: replay a captured Self proof fixture into a v2 token.
-- Any `--bridge-url` defaults pointing at the renamed service.
+### 6. `docker-compose.yml`
+- Rename service `zkpassport-bridge` → `self-bridge`; update `build.dockerfile`, `container_name`, env vars (table above), broker/skill `depends_on` + bridge-URL env, and add `HEARME_BROKER_SIGNING_KEY`.
+- Update the header comment and the mock-passport onboarding hint (`SELF_MOCK_PASSPORT=1`, staging).
 
-## Database impact — minimal
-- `envelopes.disclosed_predicates` JSONB keeps the same shape (`{age_band, region}`).
-- `envelopes.unique_identifier` semantics unchanged (now a Self nullifier string).
-- `delegation_hash` / `agent_signature` schemes unchanged.
-- **No migration of existing rows** (v0, no production data). New onboardings issue v2 tokens.
+### 7. `scripts/`
+- `mock-onboard.py`: replay a captured Self proof fixture **through `POST /v1/register`** to obtain a broker-issued token.
+- `--bridge-url` defaults → renamed service.
 
 ## Testing changes (ARCHITECTURE §12)
-- Unit: mock the bridge with a canned `VerificationResult`; assert binding + predicate-derivation rejections.
-- New `test_predicate_derivation.py`: country→region, thresholds→age_band (boundaries, unmapped country, partial threshold set → `18+`).
-- E2E: swap `self-bridge` into the compose stack; onboard with a mock passport (`SELF_MOCK_PASSPORT=1`, staging) or a captured fixture; assert the boundary-leakage check still holds (envelope has exactly the 5 fields).
+- **Registration**: mock the bridge with a canned `VerificationResult`; assert binding rejections, `InvalidTimestamp`/expired-proof rejection, and the Sybil bind (second nullifier+different-key rejected).
+- **Credential** (`credential.py`): sign/verify round-trip; tampered claim or non-broker key rejected.
+- **Predicate derivation** (`test_predicate_derivation.py`): country→region, thresholds→age_band (boundaries, unmapped country, partial set → `18+`).
+- **Verify envelope**: expired/revoked/unknown registration, signature swaps; **assert the bridge client is never called on this path**.
+- **E2E**: onboard via `/v1/register` (mock passport, staging, or fixture) → assert a `registrations` row; then assert the self-bridge is hit **zero** times during `/v1/envelopes`, and the envelope body carries no `self_proofs`.
 
-## Open items to confirm against the real SDK during implementation
-1. **`userDefinedData` byte budget** — confirm it holds a 32-byte Ed25519 key (64 hex chars). If capped below that, bind via `userId` or a hash of the key instead.
-2. **Re-verifiability** — confirm `SelfBackendVerifier.verify()` is safely re-runnable on a stored `(proof, publicSignals, userContextData)` (needed for per-envelope re-verify). If proofs are single-use/freshness-bound, jump straight to the §13 verify-once + session-credential model.
-3. **Multi-proof session UX** — confirm the cleanest way to request several thresholds (sequential SelfApp requests vs one batched flow) and that all share the nullifier under one scope.
-4. **Attestation IDs** — confirm `AllIds` / which `attestationId`s to allow (passport vs EU ID card vs Aadhaar) and set `SELF_ALLOWED_IDS` accordingly.
-5. **Supported Node version** for `@selfxyz/core`; pin the version (experimental SDK).
-6. **Registry/merkle root** — confirm the off-chain verifier does not require live Celo registry membership reads (docs say no RPC); document the residual trust (IDENTITY.md caveat 5).
+## Open items — status after research
+
+| # | Item | Status |
+|---|---|---|
+| 1 | `userDefinedData` byte budget for a 32-byte key | ✅ **Resolved** — variable-length `bytes`, no documented cap; 32 bytes fits. Confirm empirically; fallback = bind a hash. |
+| 2 | `verify()` re-runnable per envelope | ⛔ **Resolved against it** — proofs expire ±1 day → **drove the verify-once design** (decision 4). |
+| 3 | Multi-proof onboarding UX | ⚠️ **Mostly resolved** — passport scanned **once** (identity cached), then N proof round-trips (no batching: one disclosure config per proof). Chain the deeplinks; prototype latency on a real device. |
+| 4 | Attestation IDs to allow | ⏳ Confirm `AllIds` (passport vs EU ID card vs Aadhaar) → set `SELF_ALLOWED_IDS`. |
+| 5 | Supported Node version for `@selfxyz/core` | ⏳ Confirm + pin (experimental SDK). |
+| 6 | Off-chain registry/merkle trust | ⏳ Docs say no RPC; verifier does not consult Celo's live registry → document residual trust (IDENTITY.md caveat 5). |
 
 ## Sequencing
 1. Land these docs (this PR).
-2. Build `self-bridge` + its tests (network-free smoke, then a live staging verify behind a flag).
-3. Broker `self_identity.py` + predicate helpers + tests.
-4. Skill onboarding v2 + proto.
-5. Compose + scripts + E2E.
-6. Flip ARCHITECTURE §11 item to **DONE**; delete the `zkpassport-bridge` dir.
+2. DB migration: add `registrations` + grants.
+3. Build `self-bridge` + tests (network-free smoke, then a live staging verify behind a flag).
+4. Broker: `self_identity.py`, `credential.py` (+ `broker_key`), `routes/register.py`, per-envelope `delegation.py`, predicate helpers + tests.
+5. Skill onboarding (EnrollmentBundle → `/v1/register`) + proto.
+6. Compose + scripts + E2E.
+7. Flip ARCHITECTURE §11 item to **DONE**; delete the `zkpassport-bridge` dir.

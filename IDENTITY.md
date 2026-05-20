@@ -72,8 +72,8 @@ Self ([self.xyz](https://self.xyz), formerly OpenPassport, acquired by Self Labs
 1. User installs the Hearme skill; it generates an Ed25519 `agent_key`.
 2. The self-bridge builds SelfApp request(s) — `scope="hearme-v1"`, `endpoint=<bridge callback>`, `userDefinedData=hex(agent_key)`, disclosures `{nationality, minimumAge}` — and returns universal-link/QR URLs.
 3. User scans with the Self app, taps their passport. The Self app **POSTs the proof to the bridge endpoint** (Self's transport; the app calls your backend directly).
-4. The bridge runs `SelfBackendVerifier.verify()`, checks the nullifier is unseen in Hearme's registry and that `userDefinedData == agent_key`.
-5. If valid and unique, a Hearme identity is created, bound to the nullifier. Disclosed attributes are **bucketed** (below) into demographic metadata; the raw values are not persisted.
+4. The skill posts the verified proofs (the **enrollment bundle**) to the broker's `POST /v1/register`. The broker runs `SelfBackendVerifier.verify()` via the bridge, checks the nullifier is unseen in Hearme's registry and that `userDefinedData == agent_key`.
+5. If valid and unique, a Hearme identity is created, bound to the nullifier. Disclosed attributes are **bucketed** (below) into demographic metadata; raw values are not persisted. The broker then issues a **broker-signed session credential** (the `DelegationToken`) that the agent replays per answer — **the Self proof is verified once here and never again.** This is forced by Self's ±1 day proof-freshness window, and it means no raw proof or raw country crosses the boundary at answer time (ARCHITECTURE §1.2, §5, §8).
 
 **Demographic disclosure — how Hearme reconstructs `age_band` and `region`.** Self has no native "5-year band" or "region" predicate, so Hearme derives both:
 
@@ -125,7 +125,7 @@ After successful passport verification, a Hearme identity consists of:
 
 6. **Single-provider dependency.** With one provider, a Self outage or critical vulnerability stalls onboarding (steady-state answering is unaffected — the phone isn't a hot dependency, ARCHITECTURE §1.13). Adding a second provider is possible later but only with a shared nullifier derivation (see "Why a single provider").
 
-7. **Minimization in transit.** Self discloses the *raw* nationality inside the proof; because the broker re-verifies per envelope, the raw country reaches the broker each time even though only `region` is stored. The verify-once + session-credential redesign (ARCHITECTURE §13) closes this.
+7. **Minimization in transit — resolved.** Self discloses the *raw* nationality inside the proof. Because verification is **verify-once-at-registration** (ARCHITECTURE §5/§8), the raw proof (and raw country) reaches the broker only once at `/v1/register`, where it is bucketed to `region` and discarded; per answer, only the broker-issued credential travels. Residual: the broker *does* see the raw country that one time at enrollment — acceptable, and avoidable only by an in-circuit "in-EU" set-membership disclosure (a future option).
 
 8. **Privacy of demographic disclosures.** Even age band + region can be deanonymizing in small populations. For low-population regions or rare demographic intersections, Hearme should aggregate or suppress breakdowns below a minimum cohort size.
 
