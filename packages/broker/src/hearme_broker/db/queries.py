@@ -73,47 +73,72 @@ async def is_revoked(conn: asyncpg.Connection, delegation_hash_hex: str) -> bool
     return row is not None
 
 
-# ----- nullifiers --------------------------------------------------------
+# ----- registrations (nullifier registry) --------------------------------
 
 
-async def bind_nullifier_agent(
-    conn: asyncpg.Connection, *, nullifier: str, agent_key: str
-) -> bool:
-    """Atomically bind ``nullifier`` to ``agent_key``.
-
-    Returns True when the nullifier was newly bound or was already bound to
-    the same agent key. Returns False when the nullifier is already bound to
-    a different agent key.
-
-    This must run inside the same transaction that inserts the envelope. The
-    INSERT/ON CONFLICT statement takes the relevant unique-index lock, so two
-    concurrent first envelopes for the same nullifier cannot both pass under
-    different agent keys.
-    """
-    result = await conn.execute(
-        """
-        INSERT INTO nullifiers (nullifier, agent_key, first_seen_at, last_seen_at)
-        VALUES ($1, $2, now(), now())
-        ON CONFLICT (nullifier) DO UPDATE
-        SET last_seen_at = now()
-        WHERE nullifiers.agent_key = EXCLUDED.agent_key
-        RETURNING agent_key
-        """,
-        nullifier,
-        agent_key,
-    )
-    return result.endswith(" 1")
-
-
-async def get_bound_agent_key(
-    conn: asyncpg.Connection, nullifier: str
+async def upsert_registration(
+    conn: asyncpg.Connection,
+    *,
+    unique_identifier: str,
+    agent_key: str,
+    disclosed_predicates: dict[str, str],
+    issued_at: datetime,
+    expires_at: datetime,
 ) -> str | None:
-    """Return the agent_key currently bound to ``nullifier`` (None if unbound)."""
+    """Atomically bind ``unique_identifier`` (nullifier) to ``agent_key``.
+
+    Returns:
+      - ``"created"``   — first registration of this nullifier.
+      - ``"refreshed"`` — re-registration with the SAME agent_key (or after a
+                          prior revocation): predicates/expiry updated.
+      - ``None``        — the nullifier is already bound to a DIFFERENT,
+                          non-revoked agent_key (the Sybil bind; reject).
+
+    The single INSERT/ON CONFLICT statement holds the PK index lock, so two
+    concurrent first registrations for one nullifier under different agent
+    keys cannot both succeed.
+    """
     row = await conn.fetchrow(
-        "SELECT agent_key FROM nullifiers WHERE nullifier = $1",
-        nullifier,
+        """
+        INSERT INTO registrations (
+          unique_identifier, agent_key, disclosed_predicates,
+          issued_at, expires_at, revoked_at
+        ) VALUES ($1, $2, $3::jsonb, $4, $5, NULL)
+        ON CONFLICT (unique_identifier) DO UPDATE
+        SET agent_key = EXCLUDED.agent_key,
+            disclosed_predicates = EXCLUDED.disclosed_predicates,
+            issued_at = EXCLUDED.issued_at,
+            expires_at = EXCLUDED.expires_at,
+            revoked_at = NULL
+        WHERE registrations.agent_key = EXCLUDED.agent_key
+           OR registrations.revoked_at IS NOT NULL
+        RETURNING (xmax = 0) AS inserted
+        """,
+        unique_identifier,
+        agent_key,
+        json.dumps(disclosed_predicates),
+        issued_at,
+        expires_at,
     )
-    return row["agent_key"] if row else None
+    if row is None:
+        return None
+    return "created" if row["inserted"] else "refreshed"
+
+
+async def get_registration(
+    conn: asyncpg.Connection, unique_identifier: str
+) -> dict[str, Any] | None:
+    """Return the registry row for ``unique_identifier`` (None if absent)."""
+    row = await conn.fetchrow(
+        """
+        SELECT unique_identifier, agent_key, disclosed_predicates,
+               issued_at, expires_at, revoked_at
+        FROM registrations
+        WHERE unique_identifier = $1
+        """,
+        unique_identifier,
+    )
+    return dict(row) if row else None
 
 
 # ----- envelopes ---------------------------------------------------------
