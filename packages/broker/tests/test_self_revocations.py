@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -128,7 +129,10 @@ async def test_self_invalidation_revokes_registration_deletes_votes_and_recomput
             qid,
         )
         assert agg["total_answers"] == 1
-        assert dict(agg["by_predicate"]) == {
+        by_predicate = agg["by_predicate"]
+        if isinstance(by_predicate, str):
+            by_predicate = json.loads(by_predicate)
+        assert dict(by_predicate) == {
             "region:NA": 1,
             "age_band:35-49": 1,
         }
