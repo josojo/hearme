@@ -91,6 +91,27 @@ CREATE TABLE registrations (
   revoked_at           TIMESTAMPTZ
 );
 
+-- Broker-side record of Self on-chain invalidation events that revoked a
+-- previously accepted nullifier. The broker treats these as authoritative:
+-- future envelopes from that nullifier reject, and already accepted envelopes
+-- are removed from aggregates when the invalidation is applied.
+CREATE TABLE self_nullifier_invalidations (
+  unique_identifier TEXT PRIMARY KEY,
+  source            TEXT NOT NULL,
+  chain_id          TEXT,
+  block_number      BIGINT NOT NULL,
+  log_index         INTEGER NOT NULL,
+  tx_hash           TEXT NOT NULL,
+  observed_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Cursor for the broker's Self on-chain invalidation listener.
+CREATE TABLE self_chain_cursors (
+  name        TEXT PRIMARY KEY,
+  last_block  BIGINT NOT NULL,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX envelopes_question_id_idx ON envelopes(question_id);
 CREATE INDEX envelopes_submitted_at_idx ON envelopes(submitted_at);
 CREATE INDEX registrations_agent_key_idx ON registrations(agent_key);

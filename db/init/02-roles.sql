@@ -3,7 +3,7 @@
 --
 -- Enforcement boundary (ARCHITECTURE.md §2, §4):
 --   hearme_web    — writes questions only; reads public aggregates.
---   hearme_broker — writes envelopes, aggregates, revocations, registrations; reads questions, askers.
+--   hearme_broker — writes envelopes, aggregates, revocations, registrations, Self invalidation state; reads questions, askers.
 --
 -- Passwords here are dev-only. Production deploys must override these
 -- via secrets injection before the init script runs.
@@ -20,6 +20,8 @@ GRANT USAGE ON SCHEMA public TO hearme_web, hearme_broker;
 REVOKE SELECT ON envelopes     FROM hearme_web;
 REVOKE SELECT ON revocations   FROM hearme_web;
 REVOKE SELECT ON registrations FROM hearme_web;
+REVOKE SELECT ON self_nullifier_invalidations FROM hearme_web;
+REVOKE SELECT ON self_chain_cursors           FROM hearme_web;
 
 -- hearme_web: writes questions + askers (for the /ask form). Reads only
 -- public result data. Raw envelopes / revocations / registrations remain
@@ -34,5 +36,7 @@ GRANT SELECT, INSERT, UPDATE  ON envelopes     TO hearme_broker;
 GRANT SELECT, INSERT, UPDATE  ON aggregates    TO hearme_broker;
 GRANT SELECT, INSERT          ON revocations   TO hearme_broker;
 GRANT SELECT, INSERT, UPDATE  ON registrations TO hearme_broker;
+GRANT SELECT, INSERT, UPDATE  ON self_nullifier_invalidations TO hearme_broker;
+GRANT SELECT, INSERT, UPDATE  ON self_chain_cursors           TO hearme_broker;
 GRANT SELECT, UPDATE          ON questions     TO hearme_broker;
 GRANT SELECT                  ON askers        TO hearme_broker;

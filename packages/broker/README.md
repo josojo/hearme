@@ -40,6 +40,14 @@ All settings are read from environment variables prefixed `HEARME_BROKER_`:
 | `HEARME_BROKER_SELF_VERIFY_TIMEOUT_SECONDS` | `30.0`                                                              | Timeout for the bridge verify call.                 |
 | `HEARME_BROKER_REQUIRE_REGISTRY_CONFIRMATION` | `True`                                                            | Require the bridge's on-chain Celo registry/root check at registration. |
 | `HEARME_BROKER_SIGNING_KEY`              | dev key                                                                | base64 32-byte Ed25519 seed signing the DelegationToken. **Override in prod.** |
+| `HEARME_BROKER_SELF_REVOCATION_LISTENER_ENABLED` | `False`                                                       | Poll Self on-chain invalidation/update events and revoke matching Hearme identities/votes. |
+| `HEARME_BROKER_SELF_REVOCATION_RPC_URL`  | —                                                                      | JSON-RPC endpoint for the chain carrying Self invalidation events. |
+| `HEARME_BROKER_SELF_REVOCATION_CONTRACT_ADDRESS` | —                                                              | Self contract address emitting invalidation/update events. |
+| `HEARME_BROKER_SELF_REVOCATION_EVENT_TOPIC` | —                                                                   | Keccak event signature topic for the Self invalidation/update event. |
+| `HEARME_BROKER_SELF_REVOCATION_NULLIFIER_TOPIC_INDEX` | `1`                                                        | Topic index containing the invalidated nullifier; set `-1` if it is in event data. |
+| `HEARME_BROKER_SELF_REVOCATION_NULLIFIER_DATA_WORD_INDEX` | `-1`                                                   | ABI data word containing the invalidated nullifier when it is not indexed. |
+| `HEARME_BROKER_SELF_REVOCATION_FROM_BLOCK` | `0`                                                                 | Initial block when no cursor exists. |
+| `HEARME_BROKER_SELF_REVOCATION_CONFIRMATIONS` | `12`                                                            | Blocks to lag behind head before processing logs. |
 
 ## Registration pipeline (`POST /v1/register`)
 
@@ -78,6 +86,22 @@ the agent in v0 for debugging; **production should set
 `HEARME_BROKER_EXPOSE_REJECTION_REASONS=False`** so the broker is not an
 oracle for which bit of an envelope went wrong.
 
+## Self on-chain invalidations
+
+Because Self proofs are verified once at registration, the broker runs an
+optional background listener for Self on-chain invalidation/update events. When a
+configured event emits an old nullifier, the broker:
+
+1. records the invalidation in `self_nullifier_invalidations`;
+2. sets `registrations.revoked_at` for the matching `unique_identifier`;
+3. deletes accepted envelopes from that nullifier;
+4. recomputes each affected aggregate in the same transaction.
+
+This means a Self-side identity recovery/update stops both future votes and
+already-counted votes for the old Hearme nullifier. The listener is ABI-driven by
+env vars because the concrete Self event name/topic must be supplied by the
+deployment. Until those vars are set, it remains disabled.
+
 ## Wire formats
 
 Exactly mirror `packages/proto/{delegation,envelope,question}.json`:
@@ -102,11 +126,14 @@ The broker connects as `hearme_broker`, which `db/init/02-roles.sql`
 defines with:
 
 ```sql
-GRANT SELECT, INSERT, UPDATE  ON envelopes   TO hearme_broker;
-GRANT SELECT, INSERT, UPDATE  ON aggregates  TO hearme_broker;
-GRANT SELECT, INSERT          ON revocations TO hearme_broker;
-GRANT SELECT, UPDATE          ON questions   TO hearme_broker;  -- read; UPDATE for future nonce rotation
-GRANT SELECT                  ON askers      TO hearme_broker;
+GRANT SELECT, INSERT, UPDATE  ON envelopes     TO hearme_broker;
+GRANT SELECT, INSERT, UPDATE  ON aggregates    TO hearme_broker;
+GRANT SELECT, INSERT          ON revocations   TO hearme_broker;
+GRANT SELECT, INSERT, UPDATE  ON registrations TO hearme_broker;
+GRANT SELECT, INSERT, UPDATE  ON self_nullifier_invalidations TO hearme_broker;
+GRANT SELECT, INSERT, UPDATE  ON self_chain_cursors           TO hearme_broker;
+GRANT SELECT, UPDATE          ON questions     TO hearme_broker;  -- read; UPDATE for future nonce rotation
+GRANT SELECT                  ON askers        TO hearme_broker;
 ```
 
 The broker **cannot** INSERT or DELETE `questions` or `askers`. If you
@@ -158,6 +185,9 @@ Search for `# STUB:` in code to find these. Mirrors ARCHITECTURE.md §11.
 - **On-chain registry check.** Enabled via `HEARME_BROKER_REQUIRE_REGISTRY_CONFIRMATION`
   + the bridge's `SELF_CELO_RPC_URL`/`SELF_REGISTRY_ADDRESS`. The exact registry
   contract is the documented impl open item (SELF_MIGRATION.md).
+- **Self invalidation event wiring.** The broker listener exists, but production
+  must supply the concrete Self contract address, event topic, and nullifier
+  position via `HEARME_BROKER_SELF_REVOCATION_*`.
 - **Honeypot signal handling.** The broker accepts honeypot envelopes
   like any other; no per-user scoring is emitted. v0.2 adds this.
 - **Revocation publishing.** The `revocations` table is read on every

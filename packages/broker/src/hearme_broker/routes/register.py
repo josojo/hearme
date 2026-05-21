@@ -59,6 +59,13 @@ async def register(bundle: EnrollmentBundle) -> RegisterAck:
 
     pool = get_pool()
     async with pool.acquire() as conn:
+        if await q.is_self_nullifier_invalidated(conn, verified.unique_identifier):
+            log.info(
+                "identity revoked by Self: nullifier=%s…",
+                verified.unique_identifier[:12],
+            )
+            return _ack(False, reason=RejectionReason.IDENTITY_REVOKED)
+
         # Step 3: atomic Sybil bind.
         status = await q.upsert_registration(
             conn,

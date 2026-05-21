@@ -63,6 +63,12 @@ services:
       HEARME_BROKER_REQUIRE_REGISTRY_CONFIRMATION: "0"
       # Dev signing key for the broker-issued DelegationToken. OVERRIDE in prod.
       HEARME_BROKER_SIGNING_KEY: QlJPS0VSLVNJR05JTkctS0VZLUhFQVJNRS1ERVYzMkI=
+      # Optional production hook: poll Self on-chain identity invalidation/update
+      # events and revoke matching Hearme registrations + accepted votes.
+      HEARME_BROKER_SELF_REVOCATION_LISTENER_ENABLED: "0"
+      # HEARME_BROKER_SELF_REVOCATION_RPC_URL: https://forno.celo.org
+      # HEARME_BROKER_SELF_REVOCATION_CONTRACT_ADDRESS: "0x..."
+      # HEARME_BROKER_SELF_REVOCATION_EVENT_TOPIC: "0x..."
     ports:
       - "8000:8000"
     healthcheck:

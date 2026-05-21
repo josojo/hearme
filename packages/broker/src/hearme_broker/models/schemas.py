@@ -121,6 +121,7 @@ class RejectionReason(str, Enum):
     SELF_REGISTRY_UNCONFIRMED = "self_registry_unconfirmed"  # on-chain root check
     PREDICATE_DERIVATION_FAILED = "predicate_derivation_failed"
     IDENTITY_ALREADY_BOUND = "identity_already_bound"  # nullifier→different agent_key
+    IDENTITY_REVOKED = "identity_revoked"  # Self on-chain invalidation already seen
 
     # --- per envelope (POST /v1/envelopes) ---
     TOKEN_EXPIRED = "token_expired"

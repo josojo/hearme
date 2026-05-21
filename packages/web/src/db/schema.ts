@@ -9,6 +9,7 @@ import {
   text,
   timestamp,
   integer,
+  bigint,
   jsonb,
   index,
   primaryKey,
@@ -110,3 +111,23 @@ export const registrations = pgTable(
     agentKeyIdx: index("registrations_agent_key_idx").on(t.agentKey),
   }),
 );
+
+export const selfNullifierInvalidations = pgTable("self_nullifier_invalidations", {
+  uniqueIdentifier: text("unique_identifier").primaryKey(),
+  source: text("source").notNull(),
+  chainId: text("chain_id"),
+  blockNumber: bigint("block_number", { mode: "number" }).notNull(),
+  logIndex: integer("log_index").notNull(),
+  txHash: text("tx_hash").notNull(),
+  observedAt: timestamp("observed_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const selfChainCursors = pgTable("self_chain_cursors", {
+  name: text("name").primaryKey(),
+  lastBlock: bigint("last_block", { mode: "number" }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

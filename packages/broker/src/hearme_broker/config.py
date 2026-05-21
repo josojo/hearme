@@ -49,6 +49,23 @@ class Settings(BaseSettings):
     # Dev/staging without a wired Celo RPC may set this False (documented risk).
     require_registry_confirmation: bool = True
 
+    # Self on-chain invalidation listener. Disabled until production supplies the
+    # concrete Self registry contract + revocation/update event ABI. When enabled,
+    # the broker polls eth_getLogs and invalidates matching registrations/votes.
+    self_revocation_listener_enabled: bool = False
+    self_revocation_rpc_url: str = ""
+    self_revocation_chain_id: str = "celo"
+    self_revocation_contract_address: str = ""
+    self_revocation_event_topic: str = ""
+    # Usually the invalidated action/nullifier is an indexed event arg in
+    # topics[1]. Set this to -1 and data_word_index >= 0 if it is emitted in data.
+    self_revocation_nullifier_topic_index: int = 1
+    self_revocation_nullifier_data_word_index: int = -1
+    self_revocation_from_block: int = 0
+    self_revocation_confirmations: int = 12
+    self_revocation_poll_interval_seconds: float = 15.0
+    self_revocation_cursor_name: str = "self-revocations-v1"
+
     # Ed25519 signing key (base64 of a 32-byte seed) the broker uses to sign the
     # DelegationToken it issues at registration. The agent treats the token as
     # opaque; only the broker validates it. MUST be overridden in production.
