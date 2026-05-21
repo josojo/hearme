@@ -162,7 +162,7 @@ CREATE TABLE registrations (
 CREATE TABLE aggregates (
   question_id    UUID PRIMARY KEY REFERENCES questions(id),
   total_answers  INTEGER NOT NULL DEFAULT 0,
-  by_predicate   JSONB NOT NULL DEFAULT '{}',       -- {"region:EU": 42, ...}
+  by_predicate   JSONB NOT NULL DEFAULT '{}',       -- yes/no tally per bucket: {"region:EU": {"yes": 30, "no": 12}, ...}
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

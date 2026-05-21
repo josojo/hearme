@@ -1,10 +1,13 @@
-// Age-demographics chart. Replaces the plain "age_band" bar list with a
-// fuller-bodied chart: each cohort gets a gradient bar sized to its share
-// of the total, with the absolute count and percentage rendered inline.
+// Age-demographics chart. Each cohort gets a bar sized to its share of the
+// largest cohort, split green/rose by how that cohort voted, with the yes and
+// no counts plus the cohort's share of total responses rendered inline.
+
+import { YesNoBar, YesNoCount } from "./yes-no-bar";
 
 export type AgeDatum = {
   band: string;
-  count: number;
+  yes: number;
+  no: number;
 };
 
 export type AgeChartProps = {
@@ -25,22 +28,6 @@ const BAND_ORDER = [
   "65+",
 ];
 
-// Per-cohort colour gradient — young cohorts trend teal, older cohorts trend
-// rose, with violet in the middle. Keeps the bars visually distinguishable
-// without leaning on a single hue.
-const BAND_COLORS: Record<string, [string, string]> = {
-  "0-17": ["#5eead4", "#0d9488"],
-  "18-24": ["#22d3ee", "#0e7490"],
-  "25-34": ["#818cf8", "#4338ca"],
-  "35-44": ["#a78bfa", "#6d28d9"],
-  "45-54": ["#c084fc", "#7e22ce"],
-  "55-64": ["#e879f9", "#a21caf"],
-  "55+": ["#f472b6", "#9d174d"],
-  "65+": ["#fb7185", "#9f1239"],
-};
-
-const FALLBACK_GRADIENT: [string, string] = ["#94a3b8", "#475569"];
-
 function sortBands(data: AgeDatum[]): AgeDatum[] {
   const indexOf = (b: string) => {
     const i = BAND_ORDER.indexOf(b);
@@ -51,8 +38,8 @@ function sortBands(data: AgeDatum[]): AgeDatum[] {
 
 export function AgeChart({ data, total }: AgeChartProps) {
   const sorted = sortBands(data);
-  const max = sorted.reduce((m, e) => (e.count > m ? e.count : m), 0);
-  const cohortSum = sorted.reduce((s, e) => s + e.count, 0);
+  const max = sorted.reduce((m, e) => (e.yes + e.no > m ? e.yes + e.no : m), 0);
+  const cohortSum = sorted.reduce((s, e) => s + e.yes + e.no, 0);
   const denom = total > 0 ? total : cohortSum;
 
   if (sorted.length === 0) {
@@ -66,29 +53,21 @@ export function AgeChart({ data, total }: AgeChartProps) {
   return (
     <div className="space-y-3">
       {sorted.map((e) => {
-        const widthPct = max === 0 ? 0 : (e.count / max) * 100;
-        const sharePct = denom === 0 ? 0 : (e.count / denom) * 100;
-        const [from, to] = BAND_COLORS[e.band] ?? FALLBACK_GRADIENT;
+        const count = e.yes + e.no;
+        const widthPct = max === 0 ? 0 : (count / max) * 100;
+        const sharePct = denom === 0 ? 0 : (count / denom) * 100;
         return (
           <div key={e.band} className="space-y-1">
             <div className="flex items-baseline justify-between text-sm">
               <span className="font-medium text-slate-700">{e.band}</span>
-              <span className="tabular-nums text-slate-500">
-                <span className="font-semibold text-slate-900">{e.count}</span>
-                <span className="ml-2 text-xs text-slate-400">
+              <span className="text-xs text-slate-500">
+                <YesNoCount yes={e.yes} no={e.no} />
+                <span className="ml-2 text-slate-400 tabular-nums">
                   {sharePct.toFixed(1)}%
                 </span>
               </span>
             </div>
-            <div className="relative h-3 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
-              <div
-                className="h-full rounded-full shadow-inner transition-[width] duration-300"
-                style={{
-                  width: `${widthPct}%`,
-                  background: `linear-gradient(to right, ${from}, ${to})`,
-                }}
-              />
-            </div>
+            <YesNoBar yes={e.yes} no={e.no} widthPct={widthPct} />
           </div>
         );
       })}

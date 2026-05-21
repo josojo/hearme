@@ -123,6 +123,7 @@ async def submit_envelope(envelope: Envelope) -> EnvelopeAck:
             await q.increment_aggregate(
                 conn,
                 question_id=envelope.question_id,
+                answer=envelope.answer,
                 disclosed_predicates=token.disclosed_predicates,
             )
 

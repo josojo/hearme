@@ -1,14 +1,16 @@
 // Country breakdown — used when a question's geography dimension is a list
 // of countries (continent-scoped questions) or sub-national regions
-// (country-scoped questions). Renders a ranked list of pill-cards with
-// flag emojis and gradient-filled bars, instead of a plain bar list.
+// (country-scoped questions). Renders a ranked list of pill-cards with flag
+// emojis and a green/rose bar showing how each place voted yes vs no.
 
 import { countryFlag } from "@/lib/flags";
 import { COUNTRY_NAMES } from "@/lib/geo-data";
+import { YesNoBar, YesNoCount } from "./yes-no-bar";
 
 export type CountryDatum = {
   code: string;
-  count: number;
+  yes: number;
+  no: number;
 };
 
 export type CountryBreakdownProps = {
@@ -30,9 +32,9 @@ export function CountryBreakdown({
   total,
   variant = "country",
 }: CountryBreakdownProps) {
-  const sorted = [...data].sort((a, b) => b.count - a.count);
-  const max = sorted.reduce((m, e) => (e.count > m ? e.count : m), 0);
-  const cohortSum = sorted.reduce((s, e) => s + e.count, 0);
+  const sorted = [...data].sort((a, b) => b.yes + b.no - (a.yes + a.no));
+  const max = sorted.reduce((m, e) => (e.yes + e.no > m ? e.yes + e.no : m), 0);
+  const cohortSum = sorted.reduce((s, e) => s + e.yes + e.no, 0);
   const denom = total > 0 ? total : cohortSum;
 
   if (sorted.length === 0) {
@@ -46,18 +48,14 @@ export function CountryBreakdown({
   return (
     <ol className="space-y-2">
       {sorted.map((e, i) => {
-        const widthPct = max === 0 ? 0 : (e.count / max) * 100;
-        const sharePct = denom === 0 ? 0 : (e.count / denom) * 100;
+        const count = e.yes + e.no;
+        const widthPct = max === 0 ? 0 : (count / max) * 100;
+        const sharePct = denom === 0 ? 0 : (count / denom) * 100;
         return (
           <li
             key={e.code}
             className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-violet-300 hover:shadow"
           >
-            <div
-              aria-hidden
-              className="absolute inset-y-0 left-0 rounded-r-xl bg-gradient-to-r from-violet-100 via-fuchsia-100 to-rose-100 opacity-70 transition group-hover:opacity-90"
-              style={{ width: `${widthPct}%` }}
-            />
             <div className="relative flex items-center gap-3 text-sm">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold tabular-nums text-slate-600">
                 {i + 1}
@@ -67,13 +65,16 @@ export function CountryBreakdown({
                   {countryFlag(e.code)}
                 </span>
               ) : null}
-              <span className="flex-1 truncate font-medium text-slate-800">
+              <span className="w-32 shrink-0 truncate font-medium text-slate-800">
                 {labelFor(e.code, variant)}
               </span>
-              <span className="tabular-nums text-slate-700">
-                <span className="font-semibold text-slate-900">{e.count}</span>
-                <span className="ml-2 text-xs text-slate-500">
-                  {sharePct.toFixed(1)}%
+              <div className="flex-1">
+                <YesNoBar yes={e.yes} no={e.no} widthPct={widthPct} />
+              </div>
+              <span className="w-40 shrink-0 text-right text-xs text-slate-700">
+                <YesNoCount yes={e.yes} no={e.no} />
+                <span className="ml-1.5 text-slate-400 tabular-nums">
+                  {sharePct.toFixed(0)}%
                 </span>
               </span>
             </div>

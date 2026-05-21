@@ -51,6 +51,14 @@ from .ui import UI, Channel, InMemoryChannel
 
 log = logging.getLogger("hearme_skill")
 
+# Hearme questions are yes/no, so the agent leads with a clear verdict the
+# broker can tally. The brief reason after it stays local-flavoured but never
+# leaks identity (the Answerer only sees the persona projection).
+YES_NO_STYLE_GUIDE = (
+    "This is a yes/no question. Begin your answer with 'Yes' or 'No', "
+    "then add one short sentence of reasoning."
+)
+
 
 async def answer_one(
     question: Question,
@@ -101,7 +109,9 @@ async def answer_one(
 
     projection = persona_mod.project(question, memory)
     # Answerer NEVER receives token / unique_identifier (§1.4, §7.4).
-    answer = answerer_mod.answer(projection, question, llm)
+    answer = answerer_mod.answer(
+        projection, question, llm, style_guide=YES_NO_STYLE_GUIDE
+    )
     await ledger.record_answer(question.question_id, answer.text, answer.rationale)
 
     if decision.action == "prompt_user" or policy.auto_submit_window_seconds == 0:

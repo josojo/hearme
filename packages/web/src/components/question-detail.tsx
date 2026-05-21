@@ -6,10 +6,11 @@
 // continent-bucketed, a ranked country/region list otherwise), then Age,
 // then any remaining dimensions in a generic chart.
 
-import { AggregateChart, type ByPredicate } from "./aggregate-chart";
+import { AggregateChart, isTally, type ByPredicate } from "./aggregate-chart";
 import { AgeChart } from "./age-chart";
 import { CountryBreakdown } from "./country-breakdown";
 import { WorldMap, type ContinentDatum } from "./world-map";
+import { YesNoLegend } from "./yes-no-bar";
 import { countryFlag } from "@/lib/flags";
 import {
   CONTINENT_NAMES,
@@ -86,13 +87,14 @@ function ScopePill(props: {
  */
 function partition(byPredicate: ByPredicate) {
   const geoContinent: ContinentDatum[] = [];
-  const geoCountry: Array<{ code: string; count: number }> = [];
-  const geoRegion: Array<{ code: string; count: number }> = [];
-  const age: Array<{ band: string; count: number }> = [];
+  const geoCountry: Array<{ code: string; yes: number; no: number }> = [];
+  const geoRegion: Array<{ code: string; yes: number; no: number }> = [];
+  const age: Array<{ band: string; yes: number; no: number }> = [];
   const other: ByPredicate = {};
 
   for (const [k, raw] of Object.entries(byPredicate)) {
-    if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
+    if (!isTally(raw)) continue;
+    const { yes, no } = raw;
     const idx = k.indexOf(":");
     if (idx === -1) {
       other[k] = raw;
@@ -101,23 +103,23 @@ function partition(byPredicate: ByPredicate) {
     const dim = k.slice(0, idx);
     const value = k.slice(idx + 1);
     if (dim === "age_band" || dim === "age") {
-      age.push({ band: value, count: raw });
+      age.push({ band: value, yes, no });
     } else if (dim === "country") {
-      geoCountry.push({ code: value, count: raw });
+      geoCountry.push({ code: value, yes, no });
     } else if (dim === "continent") {
       if (KNOWN_CONTINENTS.includes(value as Continent)) {
-        geoContinent.push({ code: value as Continent, count: raw });
+        geoContinent.push({ code: value as Continent, yes, no });
       } else {
-        geoRegion.push({ code: value, count: raw });
+        geoRegion.push({ code: value, yes, no });
       }
     } else if (dim === "region") {
       // `region` is overloaded: at worldwide scope it carries continent codes
       // ("EU", "NA", "AS", ...); at country scope it carries sub-national
       // labels ("northeast", "Berlin", "NSW", ...). Detect by membership.
       if (KNOWN_CONTINENTS.includes(value as Continent)) {
-        geoContinent.push({ code: value as Continent, count: raw });
+        geoContinent.push({ code: value as Continent, yes, no });
       } else {
-        geoRegion.push({ code: value, count: raw });
+        geoRegion.push({ code: value, yes, no });
       }
     } else {
       other[k] = raw;
@@ -213,6 +215,12 @@ export function QuestionDetail(props: QuestionDetailProps) {
       {!hasAnyBreakdown ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 p-8 text-center text-sm text-slate-600">
           No answers yet. Agents poll the broker every ~30s for new questions.
+        </div>
+      ) : null}
+
+      {hasAnyBreakdown ? (
+        <div className="flex items-center justify-end">
+          <YesNoLegend />
         </div>
       ) : null}
 
