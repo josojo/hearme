@@ -1,15 +1,18 @@
 "use client";
 
-// Stylised SVG world map. Each continent is a single <path> coloured by
-// vote intensity (count / max). Hovering a continent reveals a tooltip
-// with the exact count and share. Pure client component — no data fetch.
+// Stylised SVG world map. Each continent is a single <path> coloured by how
+// that continent voted — a red→amber→green diverging scale on the yes-share
+// (yes / (yes + no)), NOT by how many people answered. The number rendered on
+// each continent is still the total response count. Hovering reveals the
+// yes/no split. Pure client component — no data fetch.
 
 import { useState } from "react";
 import { CONTINENT_NAMES, type Continent } from "@/lib/geo-data";
 
 export type ContinentDatum = {
   code: Continent;
-  count: number;
+  yes: number;
+  no: number;
 };
 
 export type WorldMapProps = {
@@ -41,27 +44,68 @@ const LABEL_POS: Record<Exclude<Continent, "AN">, { x: number; y: number }> = {
   OC: { x: 868, y: 360 },
 };
 
-// Color stops for the violet → fuchsia choropleth.
-const COLOR_STOPS = [
-  "#ede9fe", // violet-100
-  "#c4b5fd", // violet-300
-  "#8b5cf6", // violet-500
-  "#6d28d9", // violet-700
-  "#4c1d95", // violet-900
-];
+const NO_DATA = "#e2e8f0"; // slate-200
 
-function colorFor(share: number): string {
-  if (share <= 0) return "#e2e8f0"; // slate-200
-  const idx = Math.min(COLOR_STOPS.length - 1, Math.floor(share * COLOR_STOPS.length));
-  return COLOR_STOPS[idx];
+// Continuous diverging spectrum on the yes-share: red (all no) → yellow
+// (even) → green (all yes). The fill is interpolated, not bucketed, so the
+// colour reflects the exact ratio.
+const NO_RGB: [number, number, number] = [220, 38, 38]; // red-600
+const EVEN_RGB: [number, number, number] = [250, 204, 21]; // yellow-400
+const YES_RGB: [number, number, number] = [22, 163, 74]; // green-600
+const SPECTRUM_CSS =
+  "linear-gradient(to right, rgb(220,38,38), rgb(250,204,21), rgb(22,163,74))";
+
+function yesShare(yes: number, no: number): number {
+  const total = yes + no;
+  return total === 0 ? 0 : yes / total;
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return Math.round(a + (b - a) * t);
+}
+
+/** Interpolated spectrum colour for the yes-share, or null when no votes. */
+function rgbForShare(yes: number, no: number): [number, number, number] | null {
+  if (yes + no === 0) return null;
+  const s = yesShare(yes, no);
+  if (s <= 0.5) {
+    const t = s / 0.5;
+    return [
+      lerp(NO_RGB[0], EVEN_RGB[0], t),
+      lerp(NO_RGB[1], EVEN_RGB[1], t),
+      lerp(NO_RGB[2], EVEN_RGB[2], t),
+    ];
+  }
+  const t = (s - 0.5) / 0.5;
+  return [
+    lerp(EVEN_RGB[0], YES_RGB[0], t),
+    lerp(EVEN_RGB[1], YES_RGB[1], t),
+    lerp(EVEN_RGB[2], YES_RGB[2], t),
+  ];
+}
+
+function colorForShare(yes: number, no: number): string {
+  const rgb = rgbForShare(yes, no);
+  return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : NO_DATA;
+}
+
+// Use light label text only over the darker red/green ends; the bright yellow
+// midband keeps dark text. Decide from the perceived luminance of the fill.
+function isDarkFill(yes: number, no: number): boolean {
+  const rgb = rgbForShare(yes, no);
+  if (!rgb) return false;
+  const lum = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+  return lum < 0.55;
 }
 
 export function WorldMap({ data, total }: WorldMapProps) {
-  const byCode = new Map(data.map((d) => [d.code, d.count]));
-  const max = data.reduce((m, d) => (d.count > m ? d.count : m), 0);
+  const byCode = new Map(data.map((d) => [d.code, d]));
 
   const [hover, setHover] = useState<Exclude<Continent, "AN"> | null>(null);
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+
+  const hovered = hover ? byCode.get(hover) : null;
+  const hoveredCount = hovered ? hovered.yes + hovered.no : 0;
 
   return (
     <div className="space-y-3">
@@ -71,7 +115,7 @@ export function WorldMap({ data, total }: WorldMapProps) {
           <svg
             viewBox="0 0 1000 500"
             role="img"
-            aria-label="World map of responses by continent"
+            aria-label="World map of yes/no responses by continent"
             className="block h-auto w-full"
             onMouseLeave={() => {
               setHover(null);
@@ -92,11 +136,12 @@ export function WorldMap({ data, total }: WorldMapProps) {
             <rect width="1000" height="500" fill="url(#oceanGlow)" />
 
             {DISPLAY_ORDER.map((code) => {
-              const count = byCode.get(code) ?? 0;
-              const share = max === 0 ? 0 : count / max;
-              const fill = colorFor(share);
+              const datum = byCode.get(code);
+              const yes = datum?.yes ?? 0;
+              const no = datum?.no ?? 0;
+              const fill = colorForShare(yes, no);
               const isHover = hover === code;
-              const hasData = count > 0;
+              const hasData = yes + no > 0;
               return (
                 <path
                   key={code}
@@ -111,7 +156,7 @@ export function WorldMap({ data, total }: WorldMapProps) {
                   }
                   style={{
                     filter: isHover
-                      ? "drop-shadow(0 4px 10px rgba(76, 29, 149, 0.35))"
+                      ? "drop-shadow(0 4px 10px rgba(15, 23, 42, 0.35))"
                       : undefined,
                   }}
                   onMouseEnter={() => setHover(code)}
@@ -126,11 +171,13 @@ export function WorldMap({ data, total }: WorldMapProps) {
               );
             })}
 
-            {/* Continent labels (subtle, always visible). */}
+            {/* Continent labels (subtle, always visible): name + total count. */}
             {DISPLAY_ORDER.map((code) => {
-              const count = byCode.get(code) ?? 0;
-              const share = max === 0 ? 0 : count / max;
-              const lightBg = share < 0.4; // need dark text on light fills
+              const datum = byCode.get(code);
+              const yes = datum?.yes ?? 0;
+              const no = datum?.no ?? 0;
+              const count = yes + no;
+              const dark = isDarkFill(yes, no);
               const pos = LABEL_POS[code];
               return (
                 <g key={`label-${code}`} pointerEvents="none">
@@ -140,10 +187,10 @@ export function WorldMap({ data, total }: WorldMapProps) {
                     textAnchor="middle"
                     fontSize="14"
                     fontWeight="600"
-                    fill={lightBg ? "#334155" : "#ffffff"}
+                    fill={dark ? "#ffffff" : "#334155"}
                     style={{
                       paintOrder: "stroke",
-                      stroke: lightBg ? "rgba(255,255,255,0.7)" : "rgba(30,27,75,0.35)",
+                      stroke: dark ? "rgba(15,23,42,0.35)" : "rgba(255,255,255,0.7)",
                       strokeWidth: 2,
                       strokeLinejoin: "round",
                     }}
@@ -156,10 +203,10 @@ export function WorldMap({ data, total }: WorldMapProps) {
                     textAnchor="middle"
                     fontSize="13"
                     fontWeight="700"
-                    fill={lightBg ? "#1e1b4b" : "#ffffff"}
+                    fill={dark ? "#ffffff" : "#1e1b4b"}
                     style={{
                       paintOrder: "stroke",
-                      stroke: lightBg ? "rgba(255,255,255,0.7)" : "rgba(30,27,75,0.35)",
+                      stroke: dark ? "rgba(15,23,42,0.35)" : "rgba(255,255,255,0.7)",
                       strokeWidth: 2,
                       strokeLinejoin: "round",
                     }}
@@ -178,36 +225,46 @@ export function WorldMap({ data, total }: WorldMapProps) {
               style={{ left: `${pointer.x}%`, top: `${pointer.y}%` }}
             >
               <div className="font-semibold">{CONTINENT_NAMES[hover]}</div>
-              <div className="mt-0.5 flex items-center gap-2 text-slate-200">
-                <span className="tabular-nums">
-                  {byCode.get(hover) ?? 0}
-                  {total > 0
-                    ? ` · ${(((byCode.get(hover) ?? 0) / total) * 100).toFixed(0)}%`
-                    : ""}
-                </span>
-                <span className="text-slate-400">of total</span>
-              </div>
+              {hoveredCount > 0 ? (
+                <div className="mt-0.5 space-y-0.5 text-slate-200">
+                  <div className="tabular-nums">
+                    <span className="font-semibold text-emerald-300">
+                      {Math.round(yesShare(hovered!.yes, hovered!.no) * 100)}% yes
+                    </span>
+                    <span className="ml-2 text-slate-400">
+                      {hovered!.yes} yes · {hovered!.no} no
+                    </span>
+                  </div>
+                  <div className="text-slate-400 tabular-nums">
+                    {hoveredCount}
+                    {total > 0
+                      ? ` · ${((hoveredCount / total) * 100).toFixed(0)}% of total`
+                      : ""}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-0.5 text-slate-400">No responses yet</div>
+              )}
             </div>
           ) : null}
         </div>
 
-        {/* Legend strip */}
+        {/* Legend strip — diverging no → yes scale. */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
           <div className="flex items-center gap-2">
-            <span className="font-medium uppercase tracking-wider text-slate-500">
-              Fewer
+            <span className="font-medium uppercase tracking-wider text-rose-600">
+              More no
             </span>
-            <div className="flex h-3 overflow-hidden rounded-full ring-1 ring-slate-200">
-              {["#e2e8f0", ...COLOR_STOPS].map((c, i) => (
-                <span key={i} style={{ background: c, width: 22 }} />
-              ))}
-            </div>
-            <span className="font-medium uppercase tracking-wider text-slate-500">
-              More
+            <div
+              className="h-3 w-32 rounded-full ring-1 ring-slate-200"
+              style={{ background: SPECTRUM_CSS }}
+            />
+            <span className="font-medium uppercase tracking-wider text-emerald-600">
+              More yes
             </span>
           </div>
           <div className="text-slate-500">
-            Hover a continent for exact numbers
+            Hover a continent for the yes/no split
           </div>
         </div>
       </div>

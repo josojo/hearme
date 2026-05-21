@@ -64,6 +64,7 @@ CREATE TABLE envelopes (
 CREATE TABLE aggregates (
   question_id    UUID PRIMARY KEY REFERENCES questions(id),
   total_answers  INTEGER NOT NULL DEFAULT 0,
+  -- yes/no tally per bucket: {"region:EU": {"yes": 30, "no": 12}, ...}
   by_predicate   JSONB NOT NULL DEFAULT '{}',
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );

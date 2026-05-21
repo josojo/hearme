@@ -16,7 +16,7 @@ from uuid import UUID
 
 import asyncpg
 
-from ..aggregates import compute_by_predicate
+from ..aggregates import classify_vote, compute_by_predicate
 
 
 # ----- questions ---------------------------------------------------------
@@ -201,7 +201,7 @@ async def invalidate_registration_and_votes(
         for question_id in affected_question_ids:
             remaining = await conn.fetch(
                 """
-                SELECT disclosed_predicates
+                SELECT answer, disclosed_predicates
                 FROM envelopes
                 WHERE question_id = $1
                 """,
@@ -382,9 +382,13 @@ async def increment_aggregate(
     conn: asyncpg.Connection,
     *,
     question_id: UUID,
+    answer: str,
     disclosed_predicates: dict[str, str],
 ) -> None:
     """Increment the aggregate row for one newly accepted envelope.
+
+    Questions are yes/no, so each disclosed (predicate, value) bucket records
+    the classified vote (``{"yes": n, "no": m}``) rather than a bare count.
 
     The advisory transaction lock serializes first-writer creation of the
     aggregate row for a question. After that, ``FOR UPDATE`` locks only the
@@ -404,10 +408,13 @@ async def increment_aggregate(
         """,
         question_id,
     )
-    delta: dict[str, int] = {}
+    vote = classify_vote(answer)
+    delta: dict[str, dict[str, int]] = {}
     for key, value in (disclosed_predicates or {}).items():
         predicate_key = f"{key}:{value}"
-        delta[predicate_key] = delta.get(predicate_key, 0) + 1
+        bucket = delta.setdefault(predicate_key, {"yes": 0, "no": 0})
+        if vote in ("yes", "no"):
+            bucket[vote] += 1
 
     if row is None:
         await conn.execute(
@@ -424,8 +431,12 @@ async def increment_aggregate(
     if isinstance(by_predicate, str):
         by_predicate = json.loads(by_predicate)
     by_predicate = dict(by_predicate or {})
-    for key, count in delta.items():
-        by_predicate[key] = int(by_predicate.get(key, 0)) + count
+    for key, bucket in delta.items():
+        current = by_predicate.get(key) or {"yes": 0, "no": 0}
+        by_predicate[key] = {
+            "yes": int(current.get("yes", 0)) + bucket["yes"],
+            "no": int(current.get("no", 0)) + bucket["no"],
+        }
 
     await conn.execute(
         """

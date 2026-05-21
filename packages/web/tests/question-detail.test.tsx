@@ -36,11 +36,11 @@ describe("QuestionDetail rendering", () => {
 
   it("renders the predicate breakdown from aggregates.by_predicate", () => {
     const byPredicate = {
-      "region:EU": 42,
-      "region:non-EU": 18,
-      "age_band:18-24": 7,
-      "age_band:25-34": 30,
-      "age_band:35-44": 23,
+      "region:EU": { yes: 30, no: 12 }, // 42 total
+      "region:non-EU": { yes: 6, no: 12 }, // 18 total
+      "age_band:18-24": { yes: 5, no: 2 }, // 7
+      "age_band:25-34": { yes: 20, no: 10 }, // 30
+      "age_band:35-44": { yes: 14, no: 9 }, // 23
     };
 
     render(
@@ -58,17 +58,18 @@ describe("QuestionDetail rendering", () => {
     expect(screen.getByText("Geography")).toBeTruthy();
     expect(screen.getByText("Age")).toBeTruthy();
 
-    // Known continent codes surface on the world map.
+    // Known continent codes surface on the world map, labelled with the
+    // total response count (yes + no).
     expect(screen.getAllByText(/Europe/i).length).toBeGreaterThan(0);
     expect(screen.getByText("42")).toBeTruthy();
 
     // Unknown geography values still surface in the ranked region list.
     expect(screen.getByText("non-EU")).toBeTruthy();
-    expect(screen.getByText("18")).toBeTruthy();
 
-    // Age bands and their counts surface in the age chart.
+    // Age bands surface in the age chart, with their yes/no split.
     expect(screen.getByText("25-34")).toBeTruthy();
-    expect(screen.getByText("30")).toBeTruthy();
+    expect(screen.getByText("20")).toBeTruthy(); // 25-34 yes count
+    expect(screen.getByText("10")).toBeTruthy(); // 25-34 no count
   });
 
   it("does not render individual envelopes or stable user identifiers", () => {
@@ -76,7 +77,7 @@ describe("QuestionDetail rendering", () => {
       <QuestionDetail
         question={baseQuestion}
         totalAnswers={2}
-        byPredicate={{ "region:EU": 2 }}
+        byPredicate={{ "region:EU": { yes: 1, no: 1 } }}
       />,
     );
 
@@ -104,8 +105,8 @@ describe("QuestionDetail rendering", () => {
         question={baseQuestion}
         totalAnswers={60}
         byPredicate={{
-          "region:EU": 42,
-          "age_band:25-34": 18,
+          "region:EU": { yes: 30, no: 12 },
+          "age_band:25-34": { yes: 12, no: 6 },
         }}
       />,
     );
@@ -120,20 +121,21 @@ describe("QuestionDetail rendering", () => {
 });
 
 describe("groupByDimension", () => {
-  it("splits 'dim:value' keys correctly and sorts values by count desc", () => {
+  it("splits 'dim:value' keys correctly and sorts values by total desc", () => {
     const grouped = groupByDimension({
-      "region:EU": 42,
-      "region:non-EU": 18,
-      "age_band:25-34": 30,
+      "region:EU": { yes: 30, no: 12 }, // 42
+      "region:non-EU": { yes: 6, no: 12 }, // 18
+      "age_band:25-34": { yes: 20, no: 10 }, // 30
     });
     expect(Object.keys(grouped).sort()).toEqual(["age_band", "region"]);
     expect(grouped.region.map((e) => e.value)).toEqual(["EU", "non-EU"]);
-    expect(grouped.region[0].count).toBe(42);
+    expect(grouped.region[0].yes).toBe(30);
+    expect(grouped.region[0].no).toBe(12);
   });
 
-  it("ignores non-numeric values", () => {
+  it("ignores values that are not yes/no tallies", () => {
     const grouped = groupByDimension({
-      "region:EU": 10,
+      "region:EU": { yes: 10, no: 0 },
       // @ts-expect-error — intentionally bad input
       "region:bad": "oops",
     });
@@ -141,7 +143,7 @@ describe("groupByDimension", () => {
   });
 
   it("groups keys without a ':' under 'other'", () => {
-    const grouped = groupByDimension({ standalone: 5 });
-    expect(grouped.other).toEqual([{ value: "standalone", count: 5 }]);
+    const grouped = groupByDimension({ standalone: { yes: 5, no: 0 } });
+    expect(grouped.other).toEqual([{ value: "standalone", yes: 5, no: 0 }]);
   });
 });

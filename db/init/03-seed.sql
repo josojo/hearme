@@ -1,8 +1,12 @@
 -- Demo seed data for hearme v0.
 --
--- Populates questions across three scopes (worldwide / continent / country),
--- envelopes with varied disclosed predicates, and matching aggregates so the
--- UI looks alive on first boot. Idempotent: ON CONFLICT DO NOTHING throughout.
+-- Populates yes/no questions across three scopes (worldwide / continent /
+-- country), envelopes with varied disclosed predicates, and matching
+-- aggregates so the UI looks alive on first boot. Questions are phrased so a
+-- verified agent answers "yes" or "no"; aggregates therefore record a yes/no
+-- tally per predicate bucket (see ARCHITECTURE.md §3), e.g.
+--   {"region:EU": {"yes": 30, "no": 18}, "age_band:25-34": {"yes": 36, "no": 25}}
+-- Idempotent: ON CONFLICT DO NOTHING / DO UPDATE throughout.
 --
 -- Runs as the postgres superuser during docker-entrypoint-initdb.d execution
 -- (alphabetical order, after 01-schema and 02-roles), so it can write to
@@ -30,33 +34,33 @@ WITH new_askers AS (
 )
 SELECT 1;
 
--- Demo questions across scopes.
--- Closes in 30 days so the seeded set stays "open" for a while.
+-- Demo questions across scopes. All are yes/no so the breakdowns can show
+-- how each cohort voted. Closes in 20-60 days so the set stays "open".
 INSERT INTO questions (id, asker_id, text, topic, scope, country, continent, closes_at) VALUES
   -- Worldwide
   ('10000000-0000-0000-0000-000000000001',
     '00000000-0000-0000-0000-000000000001',
-    'Will AI agents make the open web more honest or more hostile?',
+    'Will AI agents make the open web more honest?',
     'technology', 'worldwide', NULL, NULL,
     now() + interval '30 days'),
   ('10000000-0000-0000-0000-000000000002',
     '00000000-0000-0000-0000-000000000002',
-    'How many hours of deep work do you get on a typical day?',
+    'Do you get at least two hours of deep work on a typical day?',
     'work', 'worldwide', NULL, NULL,
     now() + interval '30 days'),
   ('10000000-0000-0000-0000-000000000003',
     '00000000-0000-0000-0000-000000000003',
-    'What is one habit that genuinely improved your life this year?',
+    'Did one new habit genuinely improve your life this year?',
     'life', 'worldwide', NULL, NULL,
     now() + interval '21 days'),
   ('10000000-0000-0000-0000-000000000004',
     '00000000-0000-0000-0000-000000000004',
-    'If you could vote on a single global climate policy, what would it be?',
+    'Should there be a single global price on carbon?',
     'climate', 'worldwide', NULL, NULL,
     now() + interval '45 days'),
   ('10000000-0000-0000-0000-000000000005',
     '00000000-0000-0000-0000-000000000005',
-    'Is remote work better, worse, or just different than office work?',
+    'Is remote work better than working from an office?',
     'work', 'worldwide', NULL, NULL,
     now() + interval '30 days'),
 
@@ -87,12 +91,12 @@ INSERT INTO questions (id, asker_id, text, topic, scope, country, continent, clo
   -- Continent: Asia
   ('20000000-0000-0000-0000-000000000005',
     '00000000-0000-0000-0000-00000000000a',
-    'Is the shift to mobile-first payments still accelerating, or saturating?',
+    'Is the shift to mobile-first payments still accelerating?',
     'fintech', 'continent', NULL, 'AS',
     now() + interval '30 days'),
   ('20000000-0000-0000-0000-000000000006',
     '00000000-0000-0000-0000-000000000007',
-    'What is the most underrated city in Asia to live in right now?',
+    'Are smaller Asian cities now better places to live than the megacities?',
     'travel', 'continent', NULL, 'AS',
     now() + interval '40 days'),
 
@@ -106,7 +110,7 @@ INSERT INTO questions (id, asker_id, text, topic, scope, country, continent, clo
   -- Continent: Africa
   ('20000000-0000-0000-0000-000000000008',
     '00000000-0000-0000-0000-00000000000c',
-    'Which sector will create the most jobs across the continent by 2030?',
+    'Will renewable energy be the continent''s biggest job creator by 2030?',
     'economy', 'continent', NULL, 'AF',
     now() + interval '60 days'),
 
@@ -137,7 +141,7 @@ INSERT INTO questions (id, asker_id, text, topic, scope, country, continent, clo
     now() + interval '30 days'),
   ('30000000-0000-0000-0000-000000000004',
     '00000000-0000-0000-0000-000000000004',
-    'Brauchen wir mehr Mietpreisbremsen oder weniger Bauvorschriften?',
+    'Brauchen wir strengere Mietpreisbremsen?',
     'housing', 'country', 'DE', 'EU',
     now() + interval '30 days'),
 
@@ -170,7 +174,7 @@ INSERT INTO questions (id, asker_id, text, topic, scope, country, continent, clo
   -- Country: United Kingdom
   ('30000000-0000-0000-0000-000000000009',
     '00000000-0000-0000-0000-000000000008',
-    'Is the NHS reformable, or does it need a fundamentally different model?',
+    'Is the NHS reformable without a fundamentally different model?',
     'policy', 'country', 'GB', 'EU',
     now() + interval '30 days'),
 
@@ -184,7 +188,7 @@ INSERT INTO questions (id, asker_id, text, topic, scope, country, continent, clo
   -- Country: Nigeria
   ('30000000-0000-0000-0000-00000000000b',
     '00000000-0000-0000-0000-00000000000c',
-    'Is the fuel-subsidy removal starting to pay off, or only hurting?',
+    'Is the fuel-subsidy removal starting to pay off?',
     'economy', 'country', 'NG', 'AF',
     now() + interval '30 days'),
 
@@ -199,162 +203,162 @@ ON CONFLICT (id) DO NOTHING;
 -- Helper: insert a batch of envelopes for one question, then write the
 -- matching aggregate row in one go. Each envelope gets a synthetic
 -- agent_signature / delegation_hash — fine for demo, since the verifier
--- doesn't run against seeded data.
+-- doesn't run against seeded data. Answers lead with Yes/No so they classify.
 --
 -- We use a CTE-per-question pattern so each block is self-contained.
 
 -- Q1: AI agents
 WITH env AS (
   INSERT INTO envelopes (question_id, unique_identifier, answer, disclosed_predicates, agent_signature, delegation_hash) VALUES
-    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u1', 'More honest — auditability finally beats virality.', '{"region":"EU","age_band":"25-34"}', 'sig-seed-1', 'del-seed-1'),
-    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u2', 'More hostile. Spam scales faster than trust.', '{"region":"NA","age_band":"35-44"}', 'sig-seed-2', 'del-seed-2'),
-    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u3', 'Both at once. Honest with the few, noisy with the many.', '{"region":"AS","age_band":"25-34"}', 'sig-seed-3', 'del-seed-3'),
-    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u4', 'Honest, eventually. The first 18 months will be ugly.', '{"region":"EU","age_band":"45-54"}', 'sig-seed-4', 'del-seed-4'),
-    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u5', 'No change. Same incentives, faster tooling.', '{"region":"SA","age_band":"25-34"}', 'sig-seed-5', 'del-seed-5'),
-    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u6', 'More honest — verified humans become the scarce signal.', '{"region":"NA","age_band":"25-34"}', 'sig-seed-6', 'del-seed-6'),
-    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u7', 'Hostile. Surveillance + automation never ends well.', '{"region":"AF","age_band":"18-24"}', 'sig-seed-7', 'del-seed-7')
+    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u1', 'Yes — auditability finally beats virality.', '{"region":"EU","age_band":"25-34"}', 'sig-seed-1', 'del-seed-1'),
+    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u2', 'No. Spam scales faster than trust.', '{"region":"NA","age_band":"35-44"}', 'sig-seed-2', 'del-seed-2'),
+    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u3', 'No — honest with the few, noisy with the many.', '{"region":"AS","age_band":"25-34"}', 'sig-seed-3', 'del-seed-3'),
+    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u4', 'Yes, eventually. The first 18 months will be ugly.', '{"region":"EU","age_band":"45-54"}', 'sig-seed-4', 'del-seed-4'),
+    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u5', 'No. Same incentives, faster tooling.', '{"region":"SA","age_band":"25-34"}', 'sig-seed-5', 'del-seed-5'),
+    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u6', 'Yes — verified humans become the scarce signal.', '{"region":"NA","age_band":"25-34"}', 'sig-seed-6', 'del-seed-6'),
+    ('10000000-0000-0000-0000-000000000001', 'seed-q1-u7', 'No. Surveillance plus automation never ends well.', '{"region":"AF","age_band":"18-24"}', 'sig-seed-7', 'del-seed-7')
   ON CONFLICT DO NOTHING RETURNING 1
 )
 INSERT INTO aggregates (question_id, total_answers, by_predicate) VALUES
   ('10000000-0000-0000-0000-000000000001', 142,
-   '{"region:EU":48,"region:NA":42,"region:AS":31,"region:SA":12,"region:AF":9,"age_band:18-24":17,"age_band:25-34":61,"age_band:35-44":40,"age_band:45-54":24}')
+   '{"region:EU":{"yes":30,"no":18},"region:NA":{"yes":17,"no":25},"region:AS":{"yes":16,"no":15},"region:SA":{"yes":8,"no":4},"region:AF":{"yes":3,"no":6},"age_band:18-24":{"yes":12,"no":5},"age_band:25-34":{"yes":36,"no":25},"age_band:35-44":{"yes":18,"no":22},"age_band:45-54":{"yes":9,"no":15}}')
 ON CONFLICT (question_id) DO UPDATE SET total_answers = EXCLUDED.total_answers, by_predicate = EXCLUDED.by_predicate;
 
 -- Q2: deep work hours
 WITH env AS (
   INSERT INTO envelopes (question_id, unique_identifier, answer, disclosed_predicates, agent_signature, delegation_hash) VALUES
-    ('10000000-0000-0000-0000-000000000002', 'seed-q2-u1', 'Two on good days, zero on most.', '{"region":"EU","occupation":"engineer"}', 'sig-q2-1', 'del-q2-1'),
-    ('10000000-0000-0000-0000-000000000002', 'seed-q2-u2', '3-4 if I block calendar and disable notifications.', '{"region":"NA","occupation":"engineer"}', 'sig-q2-2', 'del-q2-2'),
-    ('10000000-0000-0000-0000-000000000002', 'seed-q2-u3', 'Less than one. Meetings shred the morning.', '{"region":"NA","occupation":"manager"}', 'sig-q2-3', 'del-q2-3'),
-    ('10000000-0000-0000-0000-000000000002', 'seed-q2-u4', '5+, but I work asynchronously.', '{"region":"EU","occupation":"writer"}', 'sig-q2-4', 'del-q2-4'),
-    ('10000000-0000-0000-0000-000000000002', 'seed-q2-u5', 'Maybe 90 minutes total, in two sprints.', '{"region":"AS","occupation":"designer"}', 'sig-q2-5', 'del-q2-5')
+    ('10000000-0000-0000-0000-000000000002', 'seed-q2-u1', 'No — two on good days, zero on most.', '{"region":"EU","occupation":"engineer"}', 'sig-q2-1', 'del-q2-1'),
+    ('10000000-0000-0000-0000-000000000002', 'seed-q2-u2', 'Yes, if I block calendar and disable notifications.', '{"region":"NA","occupation":"engineer"}', 'sig-q2-2', 'del-q2-2'),
+    ('10000000-0000-0000-0000-000000000002', 'seed-q2-u3', 'No. Meetings shred the morning.', '{"region":"NA","occupation":"manager"}', 'sig-q2-3', 'del-q2-3'),
+    ('10000000-0000-0000-0000-000000000002', 'seed-q2-u4', 'Yes, 5+, but I work asynchronously.', '{"region":"EU","occupation":"writer"}', 'sig-q2-4', 'del-q2-4'),
+    ('10000000-0000-0000-0000-000000000002', 'seed-q2-u5', 'No, maybe 90 minutes total.', '{"region":"AS","occupation":"designer"}', 'sig-q2-5', 'del-q2-5')
   ON CONFLICT DO NOTHING RETURNING 1
 )
 INSERT INTO aggregates (question_id, total_answers, by_predicate) VALUES
   ('10000000-0000-0000-0000-000000000002', 97,
-   '{"region:NA":34,"region:EU":33,"region:AS":18,"region:SA":7,"region:OC":5,"occupation:engineer":41,"occupation:manager":22,"occupation:writer":11,"occupation:designer":13,"occupation:other":10}')
+   '{"region:NA":{"yes":14,"no":20},"region:EU":{"yes":15,"no":18},"region:AS":{"yes":7,"no":11},"region:SA":{"yes":3,"no":4},"region:OC":{"yes":3,"no":2},"occupation:engineer":{"yes":22,"no":19},"occupation:manager":{"yes":5,"no":17},"occupation:writer":{"yes":7,"no":4},"occupation:designer":{"yes":6,"no":7},"occupation:other":{"yes":4,"no":6}}')
 ON CONFLICT (question_id) DO UPDATE SET total_answers = EXCLUDED.total_answers, by_predicate = EXCLUDED.by_predicate;
 
 -- Q3: one good habit
 WITH env AS (
   INSERT INTO envelopes (question_id, unique_identifier, answer, disclosed_predicates, agent_signature, delegation_hash) VALUES
-    ('10000000-0000-0000-0000-000000000003', 'seed-q3-u1', 'Putting the phone in another room before bed.', '{"region":"EU","age_band":"25-34"}', 'sig-q3-1', 'del-q3-1'),
-    ('10000000-0000-0000-0000-000000000003', 'seed-q3-u2', 'A morning walk with no audio at all.', '{"region":"NA","age_band":"35-44"}', 'sig-q3-2', 'del-q3-2'),
-    ('10000000-0000-0000-0000-000000000003', 'seed-q3-u3', 'Strength training twice a week.', '{"region":"AS","age_band":"25-34"}', 'sig-q3-3', 'del-q3-3'),
-    ('10000000-0000-0000-0000-000000000003', 'seed-q3-u4', 'Writing a single sentence in a journal each night.', '{"region":"OC","age_band":"45-54"}', 'sig-q3-4', 'del-q3-4')
+    ('10000000-0000-0000-0000-000000000003', 'seed-q3-u1', 'Yes — phone in another room before bed.', '{"region":"EU","age_band":"25-34"}', 'sig-q3-1', 'del-q3-1'),
+    ('10000000-0000-0000-0000-000000000003', 'seed-q3-u2', 'Yes, a morning walk with no audio at all.', '{"region":"NA","age_band":"35-44"}', 'sig-q3-2', 'del-q3-2'),
+    ('10000000-0000-0000-0000-000000000003', 'seed-q3-u3', 'Yes — strength training twice a week.', '{"region":"AS","age_band":"25-34"}', 'sig-q3-3', 'del-q3-3'),
+    ('10000000-0000-0000-0000-000000000003', 'seed-q3-u4', 'Yes, one journal sentence each night.', '{"region":"OC","age_band":"45-54"}', 'sig-q3-4', 'del-q3-4')
   ON CONFLICT DO NOTHING RETURNING 1
 )
 INSERT INTO aggregates (question_id, total_answers, by_predicate) VALUES
   ('10000000-0000-0000-0000-000000000003', 88,
-   '{"region:EU":29,"region:NA":26,"region:AS":18,"region:OC":8,"region:SA":7,"age_band:18-24":11,"age_band:25-34":36,"age_band:35-44":26,"age_band:45-54":15}')
+   '{"region:EU":{"yes":22,"no":7},"region:NA":{"yes":19,"no":7},"region:AS":{"yes":14,"no":4},"region:OC":{"yes":6,"no":2},"region:SA":{"yes":5,"no":2},"age_band:18-24":{"yes":8,"no":3},"age_band:25-34":{"yes":28,"no":8},"age_band:35-44":{"yes":19,"no":7},"age_band:45-54":{"yes":11,"no":4}}')
 ON CONFLICT (question_id) DO UPDATE SET total_answers = EXCLUDED.total_answers, by_predicate = EXCLUDED.by_predicate;
 
--- Q4: climate policy
+-- Q4: global carbon price
 INSERT INTO aggregates (question_id, total_answers, by_predicate) VALUES
   ('10000000-0000-0000-0000-000000000004', 213,
-   '{"region:EU":78,"region:NA":54,"region:AS":41,"region:SA":18,"region:AF":15,"region:OC":7,"age_band:18-24":48,"age_band:25-34":80,"age_band:35-44":55,"age_band:45-54":30}')
+   '{"region:EU":{"yes":58,"no":20},"region:NA":{"yes":24,"no":30},"region:AS":{"yes":26,"no":15},"region:SA":{"yes":12,"no":6},"region:AF":{"yes":9,"no":6},"region:OC":{"yes":4,"no":3},"age_band:18-24":{"yes":38,"no":10},"age_band:25-34":{"yes":52,"no":28},"age_band:35-44":{"yes":30,"no":25},"age_band:45-54":{"yes":13,"no":17}}')
 ON CONFLICT (question_id) DO UPDATE SET total_answers = EXCLUDED.total_answers, by_predicate = EXCLUDED.by_predicate;
 INSERT INTO envelopes (question_id, unique_identifier, answer, disclosed_predicates, agent_signature, delegation_hash) VALUES
-  ('10000000-0000-0000-0000-000000000004', 'seed-q4-u1', 'A simple, global carbon price — refunded as a dividend.', '{"region":"EU","age_band":"25-34"}', 'sig-q4-1', 'del-q4-1'),
-  ('10000000-0000-0000-0000-000000000004', 'seed-q4-u2', 'End fossil-fuel subsidies first; everything else follows.', '{"region":"NA","age_band":"35-44"}', 'sig-q4-2', 'del-q4-2'),
-  ('10000000-0000-0000-0000-000000000004', 'seed-q4-u3', 'Massive direct funding for grid storage R&D.', '{"region":"AS","age_band":"25-34"}', 'sig-q4-3', 'del-q4-3')
+  ('10000000-0000-0000-0000-000000000004', 'seed-q4-u1', 'Yes — a simple global carbon price, refunded as a dividend.', '{"region":"EU","age_band":"25-34"}', 'sig-q4-1', 'del-q4-1'),
+  ('10000000-0000-0000-0000-000000000004', 'seed-q4-u2', 'No — end fossil-fuel subsidies first.', '{"region":"NA","age_band":"35-44"}', 'sig-q4-2', 'del-q4-2'),
+  ('10000000-0000-0000-0000-000000000004', 'seed-q4-u3', 'Yes, paired with direct grid-storage funding.', '{"region":"AS","age_band":"25-34"}', 'sig-q4-3', 'del-q4-3')
 ON CONFLICT DO NOTHING;
 
 -- Q5: remote vs office
 INSERT INTO aggregates (question_id, total_answers, by_predicate) VALUES
   ('10000000-0000-0000-0000-000000000005', 174,
-   '{"region:NA":71,"region:EU":53,"region:AS":29,"region:SA":12,"region:OC":9,"occupation:engineer":68,"occupation:designer":21,"occupation:writer":18,"occupation:manager":34,"occupation:other":33}')
+   '{"region:NA":{"yes":40,"no":31},"region:EU":{"yes":30,"no":23},"region:AS":{"yes":13,"no":16},"region:SA":{"yes":7,"no":5},"region:OC":{"yes":5,"no":4},"occupation:engineer":{"yes":47,"no":21},"occupation:designer":{"yes":12,"no":9},"occupation:writer":{"yes":13,"no":5},"occupation:manager":{"yes":11,"no":23},"occupation:other":{"yes":16,"no":17}}')
 ON CONFLICT (question_id) DO UPDATE SET total_answers = EXCLUDED.total_answers, by_predicate = EXCLUDED.by_predicate;
 INSERT INTO envelopes (question_id, unique_identifier, answer, disclosed_predicates, agent_signature, delegation_hash) VALUES
-  ('10000000-0000-0000-0000-000000000005', 'seed-q5-u1', 'Better for execution, worse for serendipity.', '{"region":"NA","occupation":"engineer"}', 'sig-q5-1', 'del-q5-1'),
-  ('10000000-0000-0000-0000-000000000005', 'seed-q5-u2', 'Just different. Both have a "mode tax".', '{"region":"EU","occupation":"manager"}', 'sig-q5-2', 'del-q5-2')
+  ('10000000-0000-0000-0000-000000000005', 'seed-q5-u1', 'Yes for execution, though worse for serendipity.', '{"region":"NA","occupation":"engineer"}', 'sig-q5-1', 'del-q5-1'),
+  ('10000000-0000-0000-0000-000000000005', 'seed-q5-u2', 'No — both have a mode tax, and the office wins for me.', '{"region":"EU","occupation":"manager"}', 'sig-q5-2', 'del-q5-2')
 ON CONFLICT DO NOTHING;
 
 -- Continent questions
 INSERT INTO aggregates (question_id, total_answers, by_predicate) VALUES
   ('20000000-0000-0000-0000-000000000001', 64,
-   '{"country:DE":18,"country:FR":11,"country:NL":8,"country:ES":7,"country:IT":6,"country:SE":5,"country:PL":4,"country:other":5,"age_band:25-34":28,"age_band:35-44":21,"age_band:45-54":15}'),
+   '{"country:DE":{"yes":12,"no":6},"country:FR":{"yes":6,"no":5},"country:NL":{"yes":6,"no":2},"country:ES":{"yes":5,"no":2},"country:IT":{"yes":3,"no":3},"country:SE":{"yes":4,"no":1},"country:PL":{"yes":2,"no":2},"country:other":{"yes":3,"no":2},"age_band:25-34":{"yes":20,"no":8},"age_band:35-44":{"yes":13,"no":8},"age_band:45-54":{"yes":8,"no":7}}'),
   ('20000000-0000-0000-0000-000000000002', 41,
-   '{"country:DE":12,"country:FR":9,"country:IT":6,"country:CH":5,"country:AT":4,"country:NL":3,"country:other":2}'),
+   '{"country:DE":{"yes":7,"no":5},"country:FR":{"yes":6,"no":3},"country:IT":{"yes":2,"no":4},"country:CH":{"yes":4,"no":1},"country:AT":{"yes":2,"no":2},"country:NL":{"yes":2,"no":1},"country:other":{"yes":1,"no":1}}'),
   ('20000000-0000-0000-0000-000000000003', 89,
-   '{"country:US":58,"country:CA":21,"country:MX":10,"age_band:25-34":34,"age_band:35-44":30,"age_band:45-54":17,"age_band:18-24":8}'),
+   '{"country:US":{"yes":31,"no":27},"country:CA":{"yes":9,"no":12},"country:MX":{"yes":6,"no":4},"age_band:25-34":{"yes":19,"no":15},"age_band:35-44":{"yes":14,"no":16},"age_band:45-54":{"yes":7,"no":10},"age_band:18-24":{"yes":6,"no":2}}'),
   ('20000000-0000-0000-0000-000000000004', 73,
-   '{"country:US":47,"country:CA":18,"country:MX":8,"age_band:25-34":29,"age_band:35-44":24,"age_band:45-54":12,"age_band:18-24":8}'),
+   '{"country:US":{"yes":27,"no":20},"country:CA":{"yes":12,"no":6},"country:MX":{"yes":6,"no":2},"age_band:25-34":{"yes":20,"no":9},"age_band:35-44":{"yes":14,"no":10},"age_band:45-54":{"yes":5,"no":7},"age_band:18-24":{"yes":6,"no":2}}'),
   ('20000000-0000-0000-0000-000000000005', 58,
-   '{"country:CN":17,"country:IN":15,"country:JP":10,"country:KR":7,"country:SG":4,"country:ID":3,"country:VN":2}'),
+   '{"country:CN":{"yes":11,"no":6},"country:IN":{"yes":12,"no":3},"country:JP":{"yes":4,"no":6},"country:KR":{"yes":3,"no":4},"country:SG":{"yes":2,"no":2},"country:ID":{"yes":3,"no":0},"country:VN":{"yes":2,"no":0}}'),
   ('20000000-0000-0000-0000-000000000006', 47,
-   '{"country:JP":13,"country:KR":9,"country:TW":7,"country:TH":6,"country:VN":5,"country:MY":4,"country:other":3}'),
+   '{"country:JP":{"yes":7,"no":6},"country:KR":{"yes":5,"no":4},"country:TW":{"yes":4,"no":3},"country:TH":{"yes":4,"no":2},"country:VN":{"yes":3,"no":2},"country:MY":{"yes":2,"no":2},"country:other":{"yes":1,"no":2}}'),
   ('20000000-0000-0000-0000-000000000007', 35,
-   '{"country:BR":15,"country:AR":7,"country:CO":6,"country:CL":4,"country:PE":3}'),
+   '{"country:BR":{"yes":10,"no":5},"country:AR":{"yes":5,"no":2},"country:CO":{"yes":4,"no":2},"country:CL":{"yes":2,"no":2},"country:PE":{"yes":2,"no":1}}'),
   ('20000000-0000-0000-0000-000000000008', 29,
-   '{"country:NG":9,"country:ZA":7,"country:KE":5,"country:EG":4,"country:MA":2,"country:other":2}'),
+   '{"country:NG":{"yes":5,"no":4},"country:ZA":{"yes":3,"no":4},"country:KE":{"yes":3,"no":2},"country:EG":{"yes":2,"no":2},"country:MA":{"yes":1,"no":1},"country:other":{"yes":1,"no":1}}'),
   ('20000000-0000-0000-0000-000000000009', 18,
-   '{"country:AU":11,"country:NZ":5,"country:FJ":2}')
+   '{"country:AU":{"yes":6,"no":5},"country:NZ":{"yes":3,"no":2},"country:FJ":{"yes":2,"no":0}}')
 ON CONFLICT (question_id) DO UPDATE SET total_answers = EXCLUDED.total_answers, by_predicate = EXCLUDED.by_predicate;
 
 INSERT INTO envelopes (question_id, unique_identifier, answer, disclosed_predicates, agent_signature, delegation_hash) VALUES
   ('20000000-0000-0000-0000-000000000001', 'seed-c1-u1', 'Yes — open weights for any model used in admin decisions.', '{"country":"DE","age_band":"25-34"}', 'sig-c1-1', 'del-c1-1'),
-  ('20000000-0000-0000-0000-000000000001', 'seed-c1-u2', 'Only above a usage threshold. Don''t kneecap startups.', '{"country":"FR","age_band":"35-44"}', 'sig-c1-2', 'del-c1-2'),
+  ('20000000-0000-0000-0000-000000000001', 'seed-c1-u2', 'No — only above a usage threshold; don''t kneecap startups.', '{"country":"FR","age_band":"35-44"}', 'sig-c1-2', 'del-c1-2'),
   ('20000000-0000-0000-0000-000000000001', 'seed-c1-u3', 'Yes, and require reproducible training datasets.', '{"country":"NL","age_band":"25-34"}', 'sig-c1-3', 'del-c1-3'),
-  ('20000000-0000-0000-0000-000000000002', 'seed-c2-u1', 'High-speed rail yes; regional services no.', '{"country":"DE","age_band":"35-44"}', 'sig-c2-1', 'del-c2-1'),
-  ('20000000-0000-0000-0000-000000000003', 'seed-c3-u1', 'Solvable. We just refuse to actually build.', '{"country":"US","age_band":"25-34"}', 'sig-c3-1', 'del-c3-1'),
-  ('20000000-0000-0000-0000-000000000003', 'seed-c3-u2', 'Solvable in Toronto only by killing zoning.', '{"country":"CA","age_band":"35-44"}', 'sig-c3-2', 'del-c3-2'),
+  ('20000000-0000-0000-0000-000000000002', 'seed-c2-u1', 'Yes for high-speed rail; regional services still lag.', '{"country":"DE","age_band":"35-44"}', 'sig-c2-1', 'del-c2-1'),
+  ('20000000-0000-0000-0000-000000000003', 'seed-c3-u1', 'Yes — solvable, we just refuse to build.', '{"country":"US","age_band":"25-34"}', 'sig-c3-1', 'del-c3-1'),
+  ('20000000-0000-0000-0000-000000000003', 'seed-c3-u2', 'No — only by killing zoning, which won''t happen here.', '{"country":"CA","age_band":"35-44"}', 'sig-c3-2', 'del-c3-2'),
   ('20000000-0000-0000-0000-000000000004', 'seed-c4-u1', 'Yes — congestion, equity, climate. All three.', '{"country":"CA","age_band":"25-34"}', 'sig-c4-1', 'del-c4-1'),
-  ('20000000-0000-0000-0000-000000000005', 'seed-c5-u1', 'Still accelerating in SEA, saturating in North Asia.', '{"country":"SG","age_band":"35-44"}', 'sig-c5-1', 'del-c5-1'),
-  ('20000000-0000-0000-0000-000000000006', 'seed-c6-u1', 'Fukuoka. Cheaper, sunnier, calmer than Tokyo.', '{"country":"JP","age_band":"25-34"}', 'sig-c6-1', 'del-c6-1'),
-  ('20000000-0000-0000-0000-000000000007', 'seed-c7-u1', 'Dominant by headcount, shrinking in revenue share.', '{"country":"BR","age_band":"35-44"}', 'sig-c7-1', 'del-c7-1'),
-  ('20000000-0000-0000-0000-000000000008', 'seed-c8-u1', 'Renewable energy installation and operations.', '{"country":"NG","age_band":"25-34"}', 'sig-c8-1', 'del-c8-1'),
+  ('20000000-0000-0000-0000-000000000005', 'seed-c5-u1', 'Yes — still accelerating across Southeast Asia.', '{"country":"SG","age_band":"35-44"}', 'sig-c5-1', 'del-c5-1'),
+  ('20000000-0000-0000-0000-000000000006', 'seed-c6-u1', 'Yes — Fukuoka beats Tokyo on cost and calm.', '{"country":"JP","age_band":"25-34"}', 'sig-c6-1', 'del-c6-1'),
+  ('20000000-0000-0000-0000-000000000007', 'seed-c7-u1', 'Yes — dominant by headcount, even if shrinking in revenue.', '{"country":"BR","age_band":"35-44"}', 'sig-c7-1', 'del-c7-1'),
+  ('20000000-0000-0000-0000-000000000008', 'seed-c8-u1', 'Yes — renewable installation and operations will lead.', '{"country":"NG","age_band":"25-34"}', 'sig-c8-1', 'del-c8-1'),
   ('20000000-0000-0000-0000-000000000009', 'seed-c9-u1', 'Yes — Pacific Islands can''t wait for global frameworks.', '{"country":"AU","age_band":"35-44"}', 'sig-c9-1', 'del-c9-1')
 ON CONFLICT DO NOTHING;
 
 -- Country questions
 INSERT INTO aggregates (question_id, total_answers, by_predicate) VALUES
   ('30000000-0000-0000-0000-000000000001', 312,
-   '{"region:northeast":81,"region:south":98,"region:midwest":63,"region:west":70,"age_band:18-24":61,"age_band:25-34":118,"age_band:35-44":74,"age_band:45-54":42,"age_band:55+":17}'),
+   '{"region:northeast":{"yes":52,"no":29},"region:south":{"yes":41,"no":57},"region:midwest":{"yes":28,"no":35},"region:west":{"yes":47,"no":23},"age_band:18-24":{"yes":46,"no":15},"age_band:25-34":{"yes":70,"no":48},"age_band:35-44":{"yes":36,"no":38},"age_band:45-54":{"yes":12,"no":30},"age_band:55+":{"yes":4,"no":13}}'),
   ('30000000-0000-0000-0000-000000000002', 184,
-   '{"region:northeast":52,"region:south":48,"region:midwest":36,"region:west":48,"age_band:25-34":71,"age_band:35-44":52,"age_band:45-54":40,"age_band:55+":21}'),
+   '{"region:northeast":{"yes":26,"no":26},"region:south":{"yes":18,"no":30},"region:midwest":{"yes":14,"no":22},"region:west":{"yes":24,"no":24},"age_band:25-34":{"yes":38,"no":33},"age_band:35-44":{"yes":24,"no":28},"age_band:45-54":{"yes":14,"no":26},"age_band:55+":{"yes":6,"no":15}}'),
   ('30000000-0000-0000-0000-000000000003', 96,
-   '{"region:Berlin":21,"region:München":18,"region:Hamburg":14,"region:NRW":22,"region:other":21,"age_band:25-34":34,"age_band:35-44":29,"age_band:45-54":21,"age_band:18-24":12}'),
+   '{"region:Berlin":{"yes":15,"no":6},"region:München":{"yes":11,"no":7},"region:Hamburg":{"yes":10,"no":4},"region:NRW":{"yes":14,"no":8},"region:other":{"yes":12,"no":9},"age_band:25-34":{"yes":25,"no":9},"age_band:35-44":{"yes":19,"no":10},"age_band:45-54":{"yes":12,"no":9},"age_band:18-24":{"yes":6,"no":6}}'),
   ('30000000-0000-0000-0000-000000000004', 73,
-   '{"region:Berlin":18,"region:München":14,"region:Hamburg":11,"region:other":30,"age_band:25-34":25,"age_band:35-44":24,"age_band:45-54":15,"age_band:18-24":9}'),
+   '{"region:Berlin":{"yes":12,"no":6},"region:München":{"yes":6,"no":8},"region:Hamburg":{"yes":6,"no":5},"region:other":{"yes":14,"no":16},"age_band:25-34":{"yes":15,"no":10},"age_band:35-44":{"yes":12,"no":12},"age_band:45-54":{"yes":6,"no":9},"age_band:18-24":{"yes":5,"no":4}}'),
   ('30000000-0000-0000-0000-000000000005', 54,
-   '{"region:Tokyo":24,"region:Osaka":11,"region:Kyushu":8,"region:other":11,"age_band:25-34":21,"age_band:35-44":18,"age_band:45-54":11,"age_band:18-24":4}'),
+   '{"region:Tokyo":{"yes":15,"no":9},"region:Osaka":{"yes":5,"no":6},"region:Kyushu":{"yes":3,"no":5},"region:other":{"yes":5,"no":6},"age_band:25-34":{"yes":13,"no":8},"age_band:35-44":{"yes":9,"no":9},"age_band:45-54":{"yes":4,"no":7},"age_band:18-24":{"yes":2,"no":2}}'),
   ('30000000-0000-0000-0000-000000000006', 39,
-   '{"region:Tokyo":15,"region:Osaka":9,"region:other":15,"age_band:25-34":16,"age_band:35-44":14,"age_band:45-54":7,"age_band:18-24":2}'),
+   '{"region:Tokyo":{"yes":7,"no":8},"region:Osaka":{"yes":4,"no":5},"region:other":{"yes":6,"no":9},"age_band:25-34":{"yes":9,"no":7},"age_band:35-44":{"yes":5,"no":9},"age_band:45-54":{"yes":2,"no":5},"age_band:18-24":{"yes":1,"no":1}}'),
   ('30000000-0000-0000-0000-000000000007', 121,
-   '{"region:Sudeste":52,"region:Sul":24,"region:Nordeste":28,"region:Norte":7,"region:CentroOeste":10}'),
+   '{"region:Sudeste":{"yes":44,"no":8},"region:Sul":{"yes":19,"no":5},"region:Nordeste":{"yes":23,"no":5},"region:Norte":{"yes":5,"no":2},"region:CentroOeste":{"yes":8,"no":2}}'),
   ('30000000-0000-0000-0000-000000000008', 168,
-   '{"region:North":42,"region:South":48,"region:West":41,"region:East":37,"age_band:18-24":58,"age_band:25-34":74,"age_band:35-44":26,"age_band:45-54":10}'),
+   '{"region:North":{"yes":28,"no":14},"region:South":{"yes":33,"no":15},"region:West":{"yes":27,"no":14},"region:East":{"yes":22,"no":15},"age_band:18-24":{"yes":44,"no":14},"age_band:25-34":{"yes":50,"no":24},"age_band:35-44":{"yes":13,"no":13},"age_band:45-54":{"yes":3,"no":7}}'),
   ('30000000-0000-0000-0000-000000000009', 92,
-   '{"region:England":61,"region:Scotland":15,"region:Wales":9,"region:NI":7,"age_band:25-34":31,"age_band:35-44":28,"age_band:45-54":19,"age_band:55+":14}'),
+   '{"region:England":{"yes":28,"no":33},"region:Scotland":{"yes":6,"no":9},"region:Wales":{"yes":4,"no":5},"region:NI":{"yes":3,"no":4},"age_band:25-34":{"yes":16,"no":15},"age_band:35-44":{"yes":13,"no":15},"age_band:45-54":{"yes":8,"no":11},"age_band:55+":{"yes":4,"no":10}}'),
   ('30000000-0000-0000-0000-00000000000a', 47,
-   '{"region:NSW":17,"region:VIC":14,"region:QLD":8,"region:WA":5,"region:other":3}'),
+   '{"region:NSW":{"yes":11,"no":6},"region:VIC":{"yes":9,"no":5},"region:QLD":{"yes":4,"no":4},"region:WA":{"yes":3,"no":2},"region:other":{"yes":2,"no":1}}'),
   ('30000000-0000-0000-0000-00000000000b', 56,
-   '{"region:Lagos":24,"region:Abuja":11,"region:South":12,"region:North":9}'),
+   '{"region:Lagos":{"yes":9,"no":15},"region:Abuja":{"yes":5,"no":6},"region:South":{"yes":4,"no":8},"region:North":{"yes":3,"no":6}}'),
   ('30000000-0000-0000-0000-00000000000c', 62,
-   '{"region:IDF":19,"region:Sud":13,"region:Ouest":11,"region:Est":9,"region:Nord":10}')
+   '{"region:IDF":{"yes":10,"no":9},"region:Sud":{"yes":6,"no":7},"region:Ouest":{"yes":6,"no":5},"region:Est":{"yes":4,"no":5},"region:Nord":{"yes":5,"no":5}}')
 ON CONFLICT (question_id) DO UPDATE SET total_answers = EXCLUDED.total_answers, by_predicate = EXCLUDED.by_predicate;
 
 INSERT INTO envelopes (question_id, unique_identifier, answer, disclosed_predicates, agent_signature, delegation_hash) VALUES
   ('30000000-0000-0000-0000-000000000001', 'seed-us1-u1', 'Yes, indexed to median rent — $15 already lags.', '{"region":"northeast","age_band":"25-34"}', 'sig-us1-1', 'del-us1-1'),
-  ('30000000-0000-0000-0000-000000000001', 'seed-us1-u2', 'Raise it, but only with regional bands.', '{"region":"south","age_band":"35-44"}', 'sig-us1-2', 'del-us1-2'),
+  ('30000000-0000-0000-0000-000000000001', 'seed-us1-u2', 'Yes, but only with regional bands.', '{"region":"south","age_band":"35-44"}', 'sig-us1-2', 'del-us1-2'),
   ('30000000-0000-0000-0000-000000000001', 'seed-us1-u3', 'No — small businesses outside coastal cities can''t carry it.', '{"region":"midwest","age_band":"45-54"}', 'sig-us1-3', 'del-us1-3'),
   ('30000000-0000-0000-0000-000000000001', 'seed-us1-u4', 'Yes, with a phase-in for small employers.', '{"region":"west","age_band":"25-34"}', 'sig-us1-4', 'del-us1-4'),
   ('30000000-0000-0000-0000-000000000002', 'seed-us2-u1', 'Yes — capture economic rent, free the productive sector.', '{"region":"northeast","age_band":"25-34"}', 'sig-us2-1', 'del-us2-1'),
-  ('30000000-0000-0000-0000-000000000002', 'seed-us2-u2', 'In theory yes; the politics make it impossible.', '{"region":"west","age_band":"35-44"}', 'sig-us2-2', 'del-us2-2'),
+  ('30000000-0000-0000-0000-000000000002', 'seed-us2-u2', 'No — in theory yes, but the politics make it impossible.', '{"region":"west","age_band":"35-44"}', 'sig-us2-2', 'del-us2-2'),
   ('30000000-0000-0000-0000-000000000003', 'seed-de1-u1', 'Ja, aber finanziert über eine bundesweite Pendlerumlage.', '{"region":"Berlin","age_band":"25-34"}', 'sig-de1-1', 'del-de1-1'),
   ('30000000-0000-0000-0000-000000000003', 'seed-de1-u2', 'Nein. Die Länder müssen es nachhaltig finanzieren.', '{"region":"München","age_band":"35-44"}', 'sig-de1-2', 'del-de1-2'),
-  ('30000000-0000-0000-0000-000000000004', 'seed-de2-u1', 'Weniger Bauvorschriften. Mietpreisbremsen helfen kurzfristig.', '{"region":"Berlin","age_band":"25-34"}', 'sig-de2-1', 'del-de2-1'),
+  ('30000000-0000-0000-0000-000000000004', 'seed-de2-u1', 'Ja — der Markt in Berlin braucht strengere Bremsen.', '{"region":"Berlin","age_band":"25-34"}', 'sig-de2-1', 'del-de2-1'),
   ('30000000-0000-0000-0000-000000000005', 'seed-jp1-u1', 'Yes — Tokyo startups hire in English now without controversy.', '{"region":"Tokyo","age_band":"25-34"}', 'sig-jp1-1', 'del-jp1-1'),
-  ('30000000-0000-0000-0000-000000000006', 'seed-jp2-u1', 'Slowly. Trial companies report 30% productivity wins.', '{"region":"Tokyo","age_band":"35-44"}', 'sig-jp2-1', 'del-jp2-1'),
+  ('30000000-0000-0000-0000-000000000006', 'seed-jp2-u1', 'No — trial wins are real but it won''t generalize soon.', '{"region":"Tokyo","age_band":"35-44"}', 'sig-jp2-1', 'del-jp2-1'),
   ('30000000-0000-0000-0000-000000000007', 'seed-br1-u1', 'Sim — quase não uso dinheiro vivo desde 2022.', '{"region":"Sudeste","age_band":"25-34"}', 'sig-br1-1', 'del-br1-1'),
-  ('30000000-0000-0000-0000-000000000007', 'seed-br1-u2', 'Mudou tudo no comércio pequeno.', '{"region":"Nordeste","age_band":"35-44"}', 'sig-br1-2', 'del-br1-2'),
+  ('30000000-0000-0000-0000-000000000007', 'seed-br1-u2', 'Sim, mudou tudo no comércio pequeno.', '{"region":"Nordeste","age_band":"35-44"}', 'sig-br1-2', 'del-br1-2'),
   ('30000000-0000-0000-0000-000000000008', 'seed-in1-u1', 'Yes — rural adoption still has miles to go.', '{"region":"South","age_band":"25-34"}', 'sig-in1-1', 'del-in1-1'),
-  ('30000000-0000-0000-0000-000000000008', 'seed-in1-u2', 'Maybe — merchant fees may finally land.', '{"region":"North","age_band":"35-44"}', 'sig-in1-2', 'del-in1-2'),
-  ('30000000-0000-0000-0000-000000000009', 'seed-gb1-u1', 'Reformable, but the workforce model is what needs rethinking.', '{"region":"England","age_band":"35-44"}', 'sig-gb1-1', 'del-gb1-1'),
+  ('30000000-0000-0000-0000-000000000008', 'seed-in1-u2', 'Yes — still doubling; rural is the runway.', '{"region":"North","age_band":"35-44"}', 'sig-in1-2', 'del-in1-2'),
+  ('30000000-0000-0000-0000-000000000009', 'seed-gb1-u1', 'No — it needs a fundamentally different model, not tweaks.', '{"region":"England","age_band":"35-44"}', 'sig-gb1-1', 'del-gb1-1'),
   ('30000000-0000-0000-0000-00000000000a', 'seed-au1-u1', 'Yes — negative gearing is a fairness problem.', '{"region":"NSW","age_band":"25-34"}', 'sig-au1-1', 'del-au1-1'),
-  ('30000000-0000-0000-0000-00000000000b', 'seed-ng1-u1', 'Painful now, but the parallel market is shrinking.', '{"region":"Lagos","age_band":"25-34"}', 'sig-ng1-1', 'del-ng1-1'),
-  ('30000000-0000-0000-0000-00000000000c', 'seed-fr1-u1', 'Viable dans certains services; pas partout.', '{"region":"IDF","age_band":"35-44"}', 'sig-fr1-1', 'del-fr1-1')
+  ('30000000-0000-0000-0000-00000000000b', 'seed-ng1-u1', 'No — painful now, the gains haven''t landed yet.', '{"region":"Lagos","age_band":"25-34"}', 'sig-ng1-1', 'del-ng1-1'),
+  ('30000000-0000-0000-0000-00000000000c', 'seed-fr1-u1', 'Oui, viable dans certains services; pas partout.', '{"region":"IDF","age_band":"35-44"}', 'sig-fr1-1', 'del-fr1-1')
 ON CONFLICT DO NOTHING;
 
 COMMIT;

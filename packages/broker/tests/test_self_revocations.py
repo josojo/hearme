@@ -73,7 +73,7 @@ async def test_self_invalidation_revokes_registration_deletes_votes_and_recomput
             conn,
             question_id=qid,
             unique_identifier=invalid_uid,
-            answer="remove me",
+            answer="Yes, remove me",
             disclosed_predicates={"region": "EU", "age_band": "25-34"},
             agent_signature="sig-a",
             delegation_hash_hex="hash-a",
@@ -81,13 +81,14 @@ async def test_self_invalidation_revokes_registration_deletes_votes_and_recomput
         await q.increment_aggregate(
             conn,
             question_id=qid,
+            answer="Yes, remove me",
             disclosed_predicates={"region": "EU", "age_band": "25-34"},
         )
         await q.insert_envelope(
             conn,
             question_id=qid,
             unique_identifier=other_uid,
-            answer="keep me",
+            answer="No, keep me",
             disclosed_predicates={"region": "NA", "age_band": "35-49"},
             agent_signature="sig-b",
             delegation_hash_hex="hash-b",
@@ -95,6 +96,7 @@ async def test_self_invalidation_revokes_registration_deletes_votes_and_recomput
         await q.increment_aggregate(
             conn,
             question_id=qid,
+            answer="No, keep me",
             disclosed_predicates={"region": "NA", "age_band": "35-49"},
         )
 
@@ -133,6 +135,6 @@ async def test_self_invalidation_revokes_registration_deletes_votes_and_recomput
         if isinstance(by_predicate, str):
             by_predicate = json.loads(by_predicate)
         assert dict(by_predicate) == {
-            "region:NA": 1,
-            "age_band:35-49": 1,
+            "region:NA": {"yes": 0, "no": 1},
+            "age_band:35-49": {"yes": 0, "no": 1},
         }

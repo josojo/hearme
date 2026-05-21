@@ -12,22 +12,35 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from hearme_broker.aggregates import compute_by_predicate
+from hearme_broker.aggregates import classify_vote, compute_by_predicate
 from hearme_broker.db import queries as q
+
+
+def test_classify_vote_reads_leading_word_across_languages():
+    assert classify_vote("Yes — auditability beats virality.") == "yes"
+    assert classify_vote("no way, that's worse") == "no"
+    assert classify_vote("Sim, mudou tudo.") == "yes"
+    assert classify_vote("Nein, das hilft nicht.") == "no"
+    assert classify_vote("Oui, c'est viable.") == "yes"
+    assert classify_vote("Sí, claramente.") == "yes"
+    # Unclassifiable / empty -> None (still counts toward total_answers).
+    assert classify_vote("Both at once, honestly.") is None
+    assert classify_vote("") is None
+    assert classify_vote(None) is None
 
 
 def test_compute_by_predicate_hand_computation():
     envelopes = [
-        {"disclosed_predicates": {"region": "EU", "age_band": "25-34"}},
-        {"disclosed_predicates": {"region": "EU", "age_band": "35-44"}},
-        {"disclosed_predicates": {"region": "non-EU", "age_band": "25-34"}},
-        {"disclosed_predicates": {"region": "EU", "age_band": "25-34"}},
+        {"answer": "Yes, definitely.", "disclosed_predicates": {"region": "EU", "age_band": "25-34"}},
+        {"answer": "No way.", "disclosed_predicates": {"region": "EU", "age_band": "35-44"}},
+        {"answer": "yes", "disclosed_predicates": {"region": "non-EU", "age_band": "25-34"}},
+        {"answer": "Yes — strongly.", "disclosed_predicates": {"region": "EU", "age_band": "25-34"}},
     ]
     assert compute_by_predicate(envelopes) == {
-        "region:EU": 3,
-        "region:non-EU": 1,
-        "age_band:25-34": 3,
-        "age_band:35-44": 1,
+        "region:EU": {"yes": 2, "no": 1},
+        "region:non-EU": {"yes": 1, "no": 0},
+        "age_band:25-34": {"yes": 3, "no": 0},
+        "age_band:35-44": {"yes": 0, "no": 1},
     }
 
 
@@ -37,26 +50,30 @@ def test_compute_by_predicate_empty():
 
 def test_compute_by_predicate_handles_missing_field():
     envelopes = [
-        {"disclosed_predicates": None},
-        {"disclosed_predicates": {}},
-        {"disclosed_predicates": {"region": "EU"}},
+        {"answer": "yes", "disclosed_predicates": None},
+        {"answer": "no", "disclosed_predicates": {}},
+        {"answer": "Yes", "disclosed_predicates": {"region": "EU"}},
     ]
-    assert compute_by_predicate(envelopes) == {"region:EU": 1}
+    assert compute_by_predicate(envelopes) == {"region:EU": {"yes": 1, "no": 0}}
 
 
 def test_compute_by_predicate_handles_json_string_from_asyncpg():
     envelopes = [
-        {"disclosed_predicates": '{"region":"EU","age_band":"25-34"}'},
+        {"answer": "No, not really.", "disclosed_predicates": '{"region":"EU","age_band":"25-34"}'},
     ]
-    assert compute_by_predicate(envelopes) == {"region:EU": 1, "age_band:25-34": 1}
+    assert compute_by_predicate(envelopes) == {
+        "region:EU": {"yes": 0, "no": 1},
+        "age_band:25-34": {"yes": 0, "no": 1},
+    }
 
 
 pytestmark_async = pytest.mark.asyncio
 
 
 @pytest.mark.asyncio
-async def test_increment_aggregate_against_real_pg(pg_pool, make_token, make_envelope):
-    # Seed 3 accepted envelopes for one question; assert aggregate increments match.
+async def test_increment_aggregate_against_real_pg(pg_pool):
+    # Seed 3 accepted envelopes for one yes/no question; assert the yes/no
+    # tally per predicate matches.
     qid = uuid.uuid4()
     async with pg_pool.acquire() as conn:
         await conn.execute(
@@ -70,18 +87,18 @@ async def test_increment_aggregate_against_real_pg(pg_pool, make_token, make_env
             datetime.now(timezone.utc) + timedelta(hours=1),
         )
 
-        # Three distinct users with mixed predicates.
+        # Three distinct users with mixed predicates and yes/no votes.
         users = [
-            (base64.b64encode(b"\x10" * 32).decode("ascii"), {"region": "EU", "age_band": "25-34"}),
-            (base64.b64encode(b"\x11" * 32).decode("ascii"), {"region": "EU", "age_band": "35-44"}),
-            (base64.b64encode(b"\x12" * 32).decode("ascii"), {"region": "non-EU", "age_band": "25-34"}),
+            (base64.b64encode(b"\x10" * 32).decode("ascii"), "Yes, agree.", {"region": "EU", "age_band": "25-34"}),
+            (base64.b64encode(b"\x11" * 32).decode("ascii"), "No, disagree.", {"region": "EU", "age_band": "35-44"}),
+            (base64.b64encode(b"\x12" * 32).decode("ascii"), "yes", {"region": "non-EU", "age_band": "25-34"}),
         ]
-        for uid, preds in users:
+        for uid, ans, preds in users:
             await q.insert_envelope(
                 conn,
                 question_id=qid,
                 unique_identifier=uid,
-                answer="x",
+                answer=ans,
                 disclosed_predicates=preds,
                 agent_signature="sig",
                 delegation_hash_hex="hash",
@@ -89,6 +106,7 @@ async def test_increment_aggregate_against_real_pg(pg_pool, make_token, make_env
             await q.increment_aggregate(
                 conn,
                 question_id=qid,
+                answer=ans,
                 disclosed_predicates=preds,
             )
 
@@ -102,8 +120,8 @@ async def test_increment_aggregate_against_real_pg(pg_pool, make_token, make_env
         if isinstance(by_pred, str):
             by_pred = _json.loads(by_pred)
         assert by_pred == {
-            "region:EU": 2,
-            "region:non-EU": 1,
-            "age_band:25-34": 2,
-            "age_band:35-44": 1,
+            "region:EU": {"yes": 1, "no": 1},
+            "region:non-EU": {"yes": 1, "no": 0},
+            "age_band:25-34": {"yes": 2, "no": 0},
+            "age_band:35-44": {"yes": 0, "no": 1},
         }
