@@ -1,5 +1,6 @@
-// Hearme logo — a stylized soundwave inside a violet→fuchsia gradient
-// "ear" silhouette. Vector, no external assets.
+// Zeitgeist logo — a live "pulse" (seismograph) line inside an indigo→violet→cyan
+// gradient tile, with a glowing node at the leading edge: the world's sentiment,
+// measured in real time. Vector, no external assets.
 
 type Props = {
   size?: number;
@@ -17,21 +18,24 @@ export function Logo({ size = 32, className }: Props) {
       aria-hidden
     >
       <defs>
-        <linearGradient id="hm-grad" x1="0" y1="0" x2="48" y2="48">
-          <stop offset="0%" stopColor="#7c3aed" />
-          <stop offset="55%" stopColor="#c026d3" />
-          <stop offset="100%" stopColor="#ec4899" />
+        <linearGradient id="zg-grad" x1="0" y1="0" x2="48" y2="48">
+          <stop offset="0%" stopColor="#4f46e5" />
+          <stop offset="45%" stopColor="#7c3aed" />
+          <stop offset="100%" stopColor="#06b6d4" />
         </linearGradient>
       </defs>
-      <rect width="48" height="48" rx="12" fill="url(#hm-grad)" />
-      {/* Soundwave bars — 5 bars, varying heights, rounded caps. */}
-      <g stroke="white" strokeLinecap="round" strokeWidth="3.2">
-        <line x1="12" y1="20" x2="12" y2="28" />
-        <line x1="18" y1="16" x2="18" y2="32" />
-        <line x1="24" y1="12" x2="24" y2="36" />
-        <line x1="30" y1="18" x2="30" y2="30" />
-        <line x1="36" y1="22" x2="36" y2="26" />
-      </g>
+      <rect width="48" height="48" rx="12" fill="url(#zg-grad)" />
+      {/* The live pulse — a baseline that spikes once, like a sentiment reading. */}
+      <path
+        d="M8 25 H17 L21 15 L25 34 L28 22 L31 25 H39"
+        stroke="white"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* The "now" node at the leading edge, with a soft halo. */}
+      <circle cx="39" cy="25" r="4" fill="white" opacity="0.35" />
+      <circle cx="39" cy="25" r="2.4" fill="white" />
     </svg>
   );
 }
@@ -41,7 +45,7 @@ export function LogoWordmark({ size = 32 }: { size?: number }) {
     <span className="flex items-center gap-2">
       <Logo size={size} />
       <span className="bg-brand-gradient bg-clip-text text-2xl font-bold tracking-tight text-transparent">
-        hearme
+        zeitgeist
       </span>
     </span>
   );

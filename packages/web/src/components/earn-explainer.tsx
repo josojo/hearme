@@ -1,9 +1,9 @@
 "use client";
 
-// "Get heard" — the supply-side explainer/simulator. Where "How it works"
-// pitches askers, this walks a would-be respondent through plugging the hearme
+// "Add your signal" — the supply-side explainer/simulator. Where "How it works"
+// pitches askers, this walks a would-be respondent through plugging the Zeitgeist
 // add-on into the agent they already run (Openclaw, Hermes, …), verifying once
-// with Self, and then earning as their agent answers polls on their behalf.
+// with Self, and then earning as their agent adds their signal to the zeitgeist.
 //
 // Each step's illustration is a small live simulation driven by a `tick` that
 // advances while the modal sits on that step: the install log streams in, the
@@ -28,8 +28,8 @@ type Step = {
 
 const STEPS: Step[] = [
   {
-    title: "Add hearme to your agent",
-    body: "Drop the hearme add-on into the agent you already run — Openclaw, Hermes, or any open runtime. One command wires it in.",
+    title: "Add Zeitgeist to your agent",
+    body: "Drop the Zeitgeist add-on into the agent you already run — Openclaw, Hermes, or any open runtime. One command wires it in.",
     illustration: TerminalIllustration,
   },
   {
@@ -39,12 +39,12 @@ const STEPS: Step[] = [
   },
   {
     title: "Your agent answers for you",
-    body: "Questions stream in. Your agent infers your take from your everyday chats, anonymizes and signs it, and submits — always within the limits you set. Override anything, anytime.",
+    body: "Questions stream in. Your agent infers your take from your everyday chats, anonymizes and signs it, and adds it to the zeitgeist — always within the limits you set. Override anything, anytime.",
     illustration: FeedIllustration,
   },
   {
-    title: "Get heard — and get paid",
-    body: "Every answer gets your voice counted and pays out a fraction of a cent. Set your policy once and it earns quietly in the background. Sell your voice — don't give it away.",
+    title: "Add your signal — and get paid",
+    body: "Every answer adds your signal to the zeitgeist and pays out a fraction of a cent. Set your policy once and it earns quietly in the background. Sell your voice — don't give it away.",
     illustration: EarningsIllustration,
   },
 ];
@@ -79,10 +79,10 @@ export function EarnExplainer() {
       <button
         type="button"
         onClick={start}
-        className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-3 py-1.5 font-medium text-violet-700 transition hover:bg-violet-100"
+        className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1.5 font-medium text-indigo-700 transition hover:bg-indigo-100"
       >
-        <MicIcon />
-        <span className="hidden sm:inline">Get heard</span>
+        <SignalIcon />
+        <span className="hidden sm:inline">Add your signal</span>
       </button>
 
       <OnboardingDialog
@@ -139,14 +139,15 @@ export function EarnExplainer() {
 
 /* ---------- icons ---------- */
 
-function MicIcon() {
+function SignalIcon() {
+  // A broadcasting node — a dot emitting two arcs: "add your signal".
   return (
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <rect x="7.5" y="2.5" width="5" height="9" rx="2.5" fill="currentColor" />
+      <circle cx="6" cy="14" r="2" fill="currentColor" />
       <path
-        d="M5 9a5 5 0 0 0 10 0M10 14v3.5M7.5 17.5h5"
+        d="M10.5 13.5a6 6 0 0 0-4-4M14 13.5A10 10 0 0 0 6.5 6"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="1.6"
         strokeLinecap="round"
       />
     </svg>
@@ -211,7 +212,7 @@ function VerifyIllustration(tick: number) {
       <div className="w-40 rounded-[1.75rem] bg-slate-900 p-2 shadow-xl ring-1 ring-slate-700/60">
         <div className="rounded-[1.4rem] bg-white px-4 py-3">
           <div className="mb-2 flex items-center justify-center gap-1.5 text-[11px] font-semibold text-slate-700">
-            <span className="grid h-4 w-4 place-items-center rounded-md bg-gradient-to-br from-violet-600 to-fuchsia-600 text-[8px] font-bold text-white">
+            <span className="grid h-4 w-4 place-items-center rounded-md bg-gradient-to-br from-indigo-600 to-cyan-500 text-[8px] font-bold text-white">
               S
             </span>
             Self
@@ -326,7 +327,7 @@ function EarningsIllustration(tick: number) {
       </p>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 transition-all"
+          className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-cyan-500 transition-all"
           style={{ width: `${Math.min(100, 42 + tick * 6)}%` }}
         />
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-// "How it works" — a small click-through that explains hearme in three steps,
+// "How it works" — a small click-through that explains Zeitgeist in three steps,
 // modeled on the onboarding popover found on prediction-market sites. Renders
 // its own trigger button (drop it anywhere) plus the modal it opens.
 //
@@ -15,7 +15,7 @@ import {
   primaryButtonClass,
 } from "./onboarding-dialog";
 
-const SEEN_KEY = "hearme:how-it-works-seen-v1";
+const SEEN_KEY = "zeitgeist:how-it-works-seen-v1";
 
 type Step = {
   title: string;
@@ -31,12 +31,12 @@ const STEPS: Step[] = [
   },
   {
     title: "Real humans answer",
-    body: "Nobody fills out a poll. A person's agent infers their answer from their everyday chats, anonymizes it, and submits it for them — proven human with Self, never a bot. The agent speaks so people don't have to.",
+    body: "Nobody fills out a poll. A person's agent infers their answer from their everyday chats, anonymizes it, and adds it to the zeitgeist for them — proven human with Self, never a bot.",
     illustration: AnswerIllustration,
   },
   {
     title: "Watch live, private results",
-    body: "Counts update in real time, broken down by geography and age. You only ever see the aggregate — individual answers stay private.",
+    body: "The zeitgeist forms in real time, broken down by geography and age. You only ever see the aggregate — individual answers stay private.",
     illustration: ResultsIllustration,
   },
 ];
@@ -204,7 +204,7 @@ function ScopeChip({
       className={
         "flex flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[10px] font-medium " +
         (active
-          ? "bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white"
+          ? "bg-gradient-to-br from-indigo-600 to-cyan-500 text-white"
           : "bg-slate-100 text-slate-600")
       }
     >
@@ -222,7 +222,7 @@ function AnswerIllustration() {
       {/* The everyday chat the agent infers the answer from. */}
       <div className="rounded-2xl bg-white p-3 shadow-md ring-1 ring-slate-200/70">
         <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
-          <span className="h-4 w-4 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500" />
+          <span className="h-4 w-4 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500" />
           your daily chat
         </div>
         <div className="flex justify-end">
@@ -313,7 +313,7 @@ function ResultsIllustration() {
             </div>
             <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600"
+                className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-cyan-500"
                 style={{ width: `${b.pct}%` }}
               />
             </div>

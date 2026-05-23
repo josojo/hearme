@@ -14,7 +14,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
 }));
 
-const SEEN_KEY = "hearme:how-it-works-seen-v1";
+const SEEN_KEY = "zeitgeist:how-it-works-seen-v1";
 
 describe("HowItWorks", () => {
   beforeEach(() => {

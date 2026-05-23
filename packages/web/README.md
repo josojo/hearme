@@ -1,7 +1,8 @@
 # hearme-web
 
-The Next.js App Router frontend for Hearme. See `/ARCHITECTURE.md` §4 for the
-authoritative spec; this README only covers operational concerns.
+The Next.js App Router frontend for Zeitgeist. See `/ARCHITECTURE.md` §4 for the
+authoritative spec; this README only covers operational concerns. (The package,
+DB roles, and CLI keep their original `hearme*` identifiers.)
 
 This package is **the only writer of `questions` and `askers`**, and reads
 public aggregate results for display. Raw envelopes and revocations remain
