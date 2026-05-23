@@ -7,7 +7,7 @@ import { and, desc, eq, gt, sql } from "drizzle-orm";
 import Link from "next/link";
 import { db } from "@/db/client";
 import { aggregates, questions } from "@/db/schema";
-import { QuestionCard } from "@/components/question-card";
+import { QuestionList } from "@/components/question-list";
 import { ScopeTabs, type Scope } from "@/components/scope-tabs";
 import { LocationBadge } from "@/components/location-badge";
 import { resolveLocation } from "@/lib/geo";
@@ -136,23 +136,19 @@ export default async function HomePage({
           </Link>
         </div>
       ) : (
-        <ul className="space-y-3">
-          {rows.map((q) => (
-            <li key={q.id}>
-              <QuestionCard
-                id={q.id}
-                text={q.text}
-                topic={q.topic}
-                scope={q.scope as Scope}
-                country={q.country}
-                continent={q.continent}
-                createdAt={q.createdAt}
-                closesAt={q.closesAt}
-                answerCount={Number(q.totalAnswers ?? 0)}
-              />
-            </li>
-          ))}
-        </ul>
+        <QuestionList
+          items={rows.map((q) => ({
+            id: q.id,
+            text: q.text,
+            topic: q.topic,
+            scope: q.scope as Scope,
+            country: q.country,
+            continent: q.continent,
+            createdAt: q.createdAt,
+            closesAt: q.closesAt,
+            answerCount: Number(q.totalAnswers ?? 0),
+          }))}
+        />
       )}
     </section>
   );
