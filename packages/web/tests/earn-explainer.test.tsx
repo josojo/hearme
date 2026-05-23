@@ -1,4 +1,4 @@
-// Behavior test for the "Get heard" supply-side explainer/simulator.
+// Behavior test for the "Add your signal" supply-side explainer/simulator.
 //
 // Covers: it does NOT auto-open (only "How it works" does), the trigger opens
 // it, Next/Back walk the four steps, and the final step exposes the external
@@ -23,15 +23,15 @@ describe("EarnExplainer", () => {
     render(<EarnExplainer />);
     expect(screen.queryByRole("dialog")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /get heard/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add your signal/i }));
     expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getByText("Add hearme to your agent")).toBeTruthy();
+    expect(screen.getByText("Add Zeitgeist to your agent")).toBeTruthy();
     expect(screen.getByText(/step 1 of 4/i)).toBeTruthy();
   });
 
   it("walks all four steps to the Get-the-skill CTA", () => {
     render(<EarnExplainer />);
-    fireEvent.click(screen.getByRole("button", { name: /get heard/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add your signal/i }));
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByText("Verify once with Self")).toBeTruthy();
@@ -40,7 +40,7 @@ describe("EarnExplainer", () => {
     expect(screen.getByText("Your agent answers for you")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByText("Get heard — and get paid")).toBeTruthy();
+    expect(screen.getByText("Add your signal — and get paid")).toBeTruthy();
 
     // Last step: Next is gone, the external CTA is present.
     expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
@@ -51,11 +51,11 @@ describe("EarnExplainer", () => {
 
   it("Back returns to the previous step", () => {
     render(<EarnExplainer />);
-    fireEvent.click(screen.getByRole("button", { name: /get heard/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add your signal/i }));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByText("Verify once with Self")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(screen.getByText("Add hearme to your agent")).toBeTruthy();
+    expect(screen.getByText("Add Zeitgeist to your agent")).toBeTruthy();
   });
 });

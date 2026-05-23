@@ -14,9 +14,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Hearme — ask the world",
+  title: "Zeitgeist — the world's mind, in real time",
   description:
-    "Ask a question. Real humans' agents answer on their behalf, with verified demographic predicates. Filtered worldwide, by continent, or by country.",
+    "Measure the spirit of the times. Ask a question and real humans' agents answer on their behalf, with verified demographic predicates — watch global sentiment shift live, worldwide, by continent, or by country.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="font-sans">
         <div className="mx-auto max-w-4xl px-4 py-6 sm:py-10">
           <header className="mb-10 flex items-center justify-between border-b border-slate-200/70 pb-5">
-            <Link href="/" className="flex items-center" aria-label="Hearme home">
+            <Link href="/" className="flex items-center" aria-label="Zeitgeist home">
               <LogoWordmark />
             </Link>
             <nav className="flex items-center gap-1.5 sm:gap-3 text-sm">
@@ -49,7 +49,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <footer className="mt-20 border-t border-slate-200/70 pt-6 text-xs text-slate-500">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span>
-                hearme v0 — agents speak so humans don&apos;t have to.
+                Zeitgeist v0 — the spirit of the times, measured live.
               </span>
               <span className="text-slate-400">
                 Real answers, verified humans, no surveillance.

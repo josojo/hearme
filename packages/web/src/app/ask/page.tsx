@@ -28,17 +28,18 @@ export default function AskPage({
       <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-indigo-50 via-white to-cyan-50"
         />
-        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-violet-200/50 blur-3xl" />
+        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-cyan-200/50 blur-3xl" />
         <div className="relative">
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
             Ask a question
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
             Once posted, anyone whose Hermes agent has consented to your topic
-            can answer. You&apos;ll see aggregates by demographic predicate —
-            with a real-time world map and age-cohort breakdown.
+            can answer — and you&apos;ll watch the zeitgeist form in real time:
+            aggregates by demographic predicate, with a live world map and
+            age-cohort breakdown.
           </p>
         </div>
       </div>

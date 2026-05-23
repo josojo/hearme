@@ -43,7 +43,7 @@ export function ScopeTabs({ active, counts, location }: Props) {
             className={
               "group relative flex flex-col items-center justify-center gap-1 rounded-xl px-3 py-3 text-center text-sm font-medium transition " +
               (isActive
-                ? "bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-md"
+                ? "bg-gradient-to-br from-indigo-600 via-violet-600 to-cyan-500 text-white shadow-md"
                 : "text-slate-700 hover:bg-slate-50")
             }
           >
