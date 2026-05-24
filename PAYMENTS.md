@@ -537,7 +537,12 @@ web client.
 ## 9. Privacy analysis
 
 The non-negotiable is §1.4: linkability is *bounded and named* (broker-side),
-and must **not** spill onto a public ledger.
+and must **not** spill onto a public ledger. This section analyzes the
+broker-built cumulative distributor (L0–L2). **Note:** the non-discretionary
+endgame (§12.4) changes the payout mechanism, and a naive per-question
+claim-by-proof would *regress* this privacy — the **required** privacy-preserving
+realization is permissionless **pooled** claims with zk + scoped nullifiers,
+specified in **§12.5**.
 
 - **What the chain reveals:** `fundQuestion` reveals (asker address, qid,
   amount, closesAt). `Claimed` reveals (agent address, total claimed). `Settled`
@@ -898,6 +903,12 @@ the transaction* — the agent and the contract settle directly. The operator's
 whole job shrinks to step 2 (run a verification *service*) and step 3 (publish
 unforgeable, public *facts*). It never picks recipients and never touches funds.
 
+> **This chart is the *trust* view, not the *privacy* realization.** Drawn
+> literally — "pay address A what Q's rule owes → from `pool[Q]`" — it would link
+> `address ↔ question` on-chain and leak which questions a user answered. The
+> privacy-preserving realization (**required**, not optional) pools payment and
+> uses zk + nullifier claims; see §12.5.
+
 **Why this is precisely non-discretionary:**
 
 - It **cannot pay itself or a fabricated address** — funds flow only to an address
@@ -917,6 +928,81 @@ part that scales up the ladder: **optimistic L1** (publish receipts; fraud-prove
 fake/omitted one; slash the bond) → **validity L2/L3** (a proof that every receipt
 is backed, so a bad set can't even be published). Same shape either way —
 **claim-by-proof** — operator as *prover/relayer*, never *decider*.
+
+### 12.5 Privacy of claim-by-proof — permissionless pooled claims (required)
+
+Claim-by-proof (§12.4) and Hearme's core privacy promise (§1.4, §9 — the public
+must never learn *which human answered which question*) are in tension, and
+resolving it is **mandatory, not a nicety**. The naive realization is a privacy
+**regression**, so the payout layer **must** use the construction below.
+
+**Why the naive version leaks.** If a claim references question `Q` and is paid
+from `pool[Q]`, the chain permanently records "address `A` answered `Q`" — exactly
+the bipartite answer graph §9 keeps off-chain. Per-question pull ⇒ per-question
+linkage. (The original §9 broker-built distributor avoided this by *aggregating
+across questions* off-chain before publishing one cumulative root — but that
+aggregation was the trusted/discretionary step we removed in §12.2–§12.4. So
+removing operator discretion re-exposes per-question structure unless the claim
+itself is made private.)
+
+**The required construction: permissionless pooled claims.** Two properties
+together restore §9's privacy while keeping the operator out of the claim path:
+
+1. **Commingled pool.** Funds are paid from a **shared** pool, not from a
+   per-question `pool[Q]`, so a claim debits no question-specific bucket. Per-
+   question accountability is preserved *without identities* using public
+   **counts**: `allocated[Q] = count[Q] × price` (where `count[Q]` = number of
+   accepted answers, already public as the aggregate), and
+   `refund[Q] = funded[Q] − allocated[Q]` returns to the asker (§12.1). The
+   contract thus knows *how much* each question consumed, never *who*.
+2. **zk membership + scoped nullifier claim.** The agent proves, in zero
+   knowledge, "I hold an accepted-answer receipt committed in some funded
+   question's `Re`, and I am a unique human" **without revealing which question or
+   which leaf**, and reveals an opaque **claim nullifier** `= H(human, Q)` (or
+   `H(human, epoch)`) so the contract can reject double-claims for that
+   `(human, question)` pair without learning `Q`. This is the standard
+   privacy-airdrop / Semaphore pattern: prove set-membership, reveal only a
+   one-time-use tag.
+
+```
+  AGENT ──── zk proof { receipt ∈ Re(some funded Q), unique human }      CONTRACT
+            + scoped nullifier  ──────────────────────────────────────▶  verify proof
+                                                                          check nullifier unused
+                                                                          pay `price` from POOL
+            ◀───────────────────────────────────────────── pays ─────── mark nullifier used
+  On-chain sees: "address A claimed `price` from the pool."  NOT which question.
+```
+
+So the answer to "can the user still hide which questions they answered?" is
+**yes — and this construction is what makes it true.** Without it, claim-by-proof
+would expose the answer graph.
+
+**Residual leaks to mind even with pooled claims:**
+
+- **Timing / amount correlation.** A burst of fixed-`price` claims right after a
+  question closes narrows the anonymity set. Mitigate with **lazy, batched
+  claims** (withdraw an accumulated lump across many questions, decorrelated from
+  any one close — the cumulative habit from §12.1), **fixed denominations**, and
+  randomized timing.
+- **Use a scoped nullifier, never the raw Self nullifier.** Otherwise every claim
+  by one human links to the others and to their identity (cf. the epoch-rotated
+  scope in ARCHITECTURE §13).
+- **`Re` leaves must be commitments, not plaintext `(address, Q)`** — else the
+  published accepted-set *is* the answer graph. Leaves are opened only inside the
+  zk proof.
+- **Optimistic (L1) carries a privacy cost.** A fraud proof needs *data to
+  challenge*, revealing receipt/envelope contents (and thus nullifier↔question
+  links) on-chain; the validity-proof path (L2/L3) reveals nothing. So **privacy
+  pulls toward L2/L3** — the same direction security (§12.2) and law (§12.3)
+  already point. The optimistic interim should therefore challenge over
+  *commitments* and be confined to the testnet/low-value window.
+- **Asker side is unchanged** — funding is public (asker ↔ their own question),
+  already noted in §9; that is the asker's privacy, and the question text is
+  public regardless. Out of scope here (relayer / sponsored wallet, §10).
+
+**Net:** permissionless pooled claims are the **required** payout mechanism for a
+production system — they are what let the user keep "which questions did I answer"
+private *and* keep the operator non-discretionary at the same time.
 
 ---
 
@@ -1000,8 +1086,8 @@ and per-user-contract burden — not merely to bound theft risk.
    validity proof of `R = §14-function(Rg, Re)` and **verifiable registration**
    (in-proof Self *or* TEE-attested) so `Rg`/`Re` cannot be fabricated, moving to
    **claim-by-proof** so the operator has *no* discretion over compensation
-   (§12.3 — this is what both removes allocation trust **and** keeps the operator
-   out of money-transmitter/custodian classification); flip token to real USDC,
+   (§12.3), realized as **permissionless pooled claims (§12.5) — required so users
+   can still hide which questions they answered**; flip token to real USDC,
    chain to Base mainnet, operator key to KMS/HSM. Only with L3 + §14.8 (tiered
    vesting) in place can value and `β` rise safely (ARCHITECTURE.md §14.8 is
    explicit that raising `β` earlier re-opens the farming hole).
