@@ -39,12 +39,12 @@ disappears forever (§12.1). Funds can never be stuck.
 These extend ARCHITECTURE.md §1; where they touch an existing principle it is
 cited.
 
-1. **The broker coordinates; it never custodies.** The escrow contract lets the
-   broker move an asker's deposit only into per-agent claimable balances, never
-   to a broker-controlled address. This preserves the existing trust posture —
-   the broker is trusted to *publish aggregates honestly* (§1.4) and now to
-   *allocate honestly*, but a compromised or dishonest broker still cannot
-   abscond with asker funds.
+1. **The broker coordinates; it never *directly* custodies.** The escrow contract
+   has no code path that transfers a pool to a broker-controlled address. This
+   removes *direct* custody, but the broker still chooses the payout recipients,
+   so honest **allocation** remains a trust assumption (and a dishonest broker
+   can self-deal — §12.2). Reducing that allocation trust is a goal in its own
+   right, for *legal* as much as security reasons (§12.3, principle 7).
 2. **Pay for grounded information, not participation (§1.15 verbatim).** The
    on-chain layer is a *settlement rail*, not a new economic model. The split
    into baseline `b` (cost reimbursement, low-risk) and grounding bonus `β`
@@ -69,6 +69,17 @@ cited.
    nullifier. The payout address is bound to that nullifier at registration with
    the same atomicity as `agent_key`, so a stolen or swapped address cannot
    redirect another human's earnings.
+7. **Non-custodial *and* non-discretionary — for legal minimalism (§12.3).**
+   Choosing how trustless to be is not only a security question; **operator
+   discretion over funds is a regulatory liability.** An operator that determines
+   who gets compensated and controls staked funds looks like a money
+   transmitter / custodian and needs bilateral contracts with every user. A
+   design where payouts are a *deterministic, verifiable function of objective
+   inputs* (personhood + signed answer + public schedule), which the operator
+   cannot deviate from, avoids that whole category of obligation. So the target
+   is **claim-by-proof, not allocate-by-operator**; the discretionary L0 model is
+   for **testnet only**, and the architecture must be ready to be
+   non-discretionary before any real value flows.
 
 ---
 
@@ -773,6 +784,66 @@ residual. This is the same *class* of assumption as the honest-aggregation one
 Hearme already documents (§1.4) — now bounded, detectable, bonded, and on a path
 to provable.
 
+### 12.3 Trust-minimization is also a *legal* simplification
+
+The choice of rung is **not only "is the residual risk bounded?"** It is also
+**"does the operator become a regulated financial intermediary, and does it have
+to write contracts with its users?"** On that axis a *trusted* model can cost
+*more* engineering than a trustless one — so trustlessness is not just a
+security nicety to defer, it is a way to **avoid legal/operational machinery
+entirely**.
+
+**What triggers the burden is discretion + control over funds.** If the operator
+*determines who gets compensated* and can move or withhold staked funds, it looks
+like **custody / money transmission**: US state money-transmitter licenses, EU
+PSD2 EMI/PI authorization, MiCA CASP/VASP registration — and, as importantly, a
+**contractual relationship with every user**: custodial terms with askers (you
+hold their stake), payee/compensation terms with agents (you decide their pay),
+plus likely payee tax reporting and consumer-protection duties. "We promise to
+allocate honestly" *is* the discretionary posture that attaches all of this.
+
+**Removing discretion removes the category.** If payouts are a **deterministic,
+verifiable function of objective inputs** — personhood proof + signed accepted
+answer + a public payout schedule — enforced by the contract such that the
+operator **cannot deviate**, then the operator is far more plausibly a
+*software/infrastructure provider* than an intermediary: lighter custody/MTL
+exposure, and **no bilateral user contracts to write**, because the autonomous
+contract + published rules *are* the agreement (credible neutrality). The
+asker-funds-the-contract, asker-self-refunds (§12.1), and agent-self-claims
+(§12.1) pieces are *already* non-custodial; **the only discretionary chokepoint
+left is allocation** (who the leaves pay) — which is exactly what §12.2 removes.
+
+**This reframes the ladder: discretion is a *liability*, not merely a risk.**
+
+- The operator must **never** be the discretionary determiner of payouts in a
+  live, real-value system — even an "honest but discretionary" L0/L1 carries the
+  heavy legal footprint while value flows.
+- **L0 is acceptable on testnet only** (no real value, no real users ⇒ no real
+  compliance surface). The architecture must be *ready* to be non-discretionary
+  before mainnet value, so we never build ourselves into a custodial/discretionary
+  posture we then have to unwind under regulatory pressure.
+- The **baseline/β split makes it achievable now**: baseline is already a
+  deterministic rule (verified human + valid signed answer ⇒ fixed amount), so it
+  can be made operator-non-discretionary; β — the only genuine discretion — is
+  ≈0. Push baseline to *the-rule-pays* and the operator's legal role collapses to
+  relaying/proving.
+- **Target architecture: claim-by-proof, not allocate-by-operator.** Agents
+  redeem what the rules entitle them to by presenting proofs to the contract; the
+  operator only publishes attestations it cannot forge or selectively withhold
+  *without detection*. Withholding then degrades to a *liveness* problem (bounded
+  by the §12.1 refund + bond), not a *discretionary-compensation* one.
+
+**Honest limits (so this doesn't oversell).** Trustless ≠ zero legal exposure.
+The **fiat on-ramp** (card → token, VISION §"How It Works") is regulated MSB
+activity regardless and likely needs a licensed PSP partner — an argument *for*
+the crypto-native asker path here, which sidesteps it for now (§10). Regulators
+increasingly look through to deployers/beneficiaries; MiCA and OFAC
+sanctions-screening can still apply; tax may still apply. This is not legal
+advice and is jurisdiction-specific. But the *direction and magnitude* hold:
+**removing operator discretion removes the single biggest, clearest category of
+obligation**, which is why §12.2's endgame (L2/L3 + claim-by-proof) is a
+first-class design goal, not a deferred luxury.
+
 ---
 
 ## 13. Testing posture (extends ARCHITECTURE.md §12)
@@ -832,6 +903,12 @@ to provable.
 
 ## 15. Phasing / rollout
 
+**Governing rule (§12.3):** real value must never ride on a *discretionary*
+allocation model. The discretionary L0 path is **testnet-only**; mainnet value
+requires the operator's allocation role to be non-discretionary
+(claim-by-proof / verifiable settlement), to avoid the custody/money-transmission
+and per-user-contract burden — not merely to bound theft risk.
+
 1. **Phase 0 (today):** `payout_entitlements` recorded; no chain. *(done in v0)*
 2. **Phase 1 (this concept):** deploy `HearmeEscrow` + `MockUSDC` on Base
    Sepolia; web funding step; broker funding-watcher + settler; skill payout key
@@ -846,17 +923,25 @@ to provable.
    payout addresses; optional IPFS/Arweave leaf storage; card→sponsored-wallet
    on-ramp (§10).
 4. **Phase 3 (mainnet + verifiable settlement):** **L2/L3** (§12.2) — a zk
-   validity proof of `R = §14-function(Rg, Re)` and **on-chain/in-proof Self
-   registration** so `Rg`/`Re` cannot be fabricated (this is what removes broker
-   allocation trust); flip token to real USDC, chain to Base mainnet, operator
-   key to KMS/HSM. Only with L3 + §14.8 (tiered vesting) in place can value and
-   `β` rise safely (ARCHITECTURE.md §14.8 is explicit that raising `β` earlier
-   re-opens the farming hole).
+   validity proof of `R = §14-function(Rg, Re)` and **verifiable registration**
+   (in-proof Self *or* TEE-attested) so `Rg`/`Re` cannot be fabricated, moving to
+   **claim-by-proof** so the operator has *no* discretion over compensation
+   (§12.3 — this is what both removes allocation trust **and** keeps the operator
+   out of money-transmitter/custodian classification); flip token to real USDC,
+   chain to Base mainnet, operator key to KMS/HSM. Only with L3 + §14.8 (tiered
+   vesting) in place can value and `β` rise safely (ARCHITECTURE.md §14.8 is
+   explicit that raising `β` earlier re-opens the farming hole).
 
 ---
 
 ## 16. Open questions
 
+- **Regulatory characterization (§12.3)** — at what point does discretionary
+  allocation make the operator a money transmitter / custodian in the target
+  jurisdictions, and what is the minimum non-discretionary design that avoids it
+  (and the per-user contracts that come with it)? Drives *how soon* claim-by-proof
+  is required, and whether any L0/L1 real-value window is permissible at all.
+  Needs counsel; jurisdiction-specific.
 - **Operator-key custody & rotation** — same unresolved question as the broker
   signing key (ARCHITECTURE.md §13); KMS vs HSM, rotation with an overlap window.
 - **Payout-address rotation / lost key** — out of scope here; needs a signed
