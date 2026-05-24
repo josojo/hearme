@@ -844,6 +844,80 @@ advice and is jurisdiction-specific. But the *direction and magnitude* hold:
 obligation**, which is why §12.2's endgame (L2/L3 + claim-by-proof) is a
 first-class design goal, not a deferred luxury.
 
+### 12.4 The non-discretionary flow at a glance
+
+The whole target reduces to one inversion: stop the operator from *deciding who
+gets paid and pushing money out*; instead let the **contract hold a fixed public
+rule** and let **whoever can *prove* they qualify *pull* their payout**.
+
+> **Cashier vs. vending machine.** A *cashier* takes the asker's money, looks at
+> who answered, and *chooses* to pay them — you must trust the cashier and sign an
+> agreement with them (→ custodian / money transmitter). A *vending machine* is
+> *stocked* with money and a posted rule ("insert a valid token → out comes
+> exactly `X`"); the owner stocked it but **cannot choose who it pays**, and no
+> contract with the buyer is needed because the rule is visible and self-executing
+> (→ infrastructure provider). The design turns the cashier into a vending machine.
+
+**A baseline payout is owed iff three *facts* are true — and each is made provable
+to the contract:**
+
+1. **Personhood** — a real, unique human (the Self nullifier) ⇒ one payout per
+   human per question.
+2. **Work** — that human's agent submitted an answer the question **accepted**
+   (valid signature, eligible, before close).
+3. **Price** — a **fixed, public schedule** (baseline per accepted answer; β ≈ 0).
+
+Payout `= rule(personhood, work, price)` — a pure function, no human judgment in
+the disbursement.
+
+```
+   ASKER                OPERATOR (broker)              CONTRACT              AGENT
+     │                        │                           │                   │
+  1. fund a question ────────────────────────────────▶  pool[Q] = stake      │
+     (deposit + post the      │                           │  + public rule    │
+      public payout rule)     │                           │                   │
+     │                  2. verify answers                 │            answer the Q
+     │                     (the *service*) ◀──────────────────────── submit envelope
+     │                        │                           │                   │
+     │                  3. ATTEST, don't allocate:        │                   │
+     │                     publish accepted-answer        │                   │
+     │                     receipts on-chain (Re root) ─▶ Re committed        │
+     │                        │                           │                   │
+     │                        │                  4. CLAIM-BY-PROOF:           │
+     │                        │                     "pay address A what    ◀──┤ present proof:
+     │                        │                      Q's rule owes" ─────────▶ │  receipt ∈ Re
+     │                        │                     contract checks proof      │  + personhood
+     │                        │                     vs rule → pays from pool[Q]│  + signature
+     │                        │                           │ ─────── pays ────▶ │
+  5. refund leftover ◀───────────────────────────────── (permissionless,      │
+     after close (§12.1)      │                           │  operator absent)  │
+```
+
+**Read the chart through the operator's role:** in step 4 the operator is *not in
+the transaction* — the agent and the contract settle directly. The operator's
+whole job shrinks to step 2 (run a verification *service*) and step 3 (publish
+unforgeable, public *facts*). It never picks recipients and never touches funds.
+
+**Why this is precisely non-discretionary:**
+
+- It **cannot pay itself or a fabricated address** — funds flow only to an address
+  that can *prove* a real accepted answer; the operator can't mint that proof.
+- It **cannot pay more** — the amount comes from the posted rule, not the
+  operator's say-so.
+- Its only residual lever is **refusing to attest a legit answer** — *censorship /
+  withholding*, which is a **liveness** problem (detectable via the committed set,
+  bounded by the asker refund, §12.1), **not** control over compensation. The
+  operator still never holds or directs the money — the property that keeps it out
+  of custody / money-transmitter classification (§12.3).
+
+**The one knob that varies** is only *how rigorously each receipt is made
+checkable* — the contract checks the math and one-claim-per-human trivially, but
+"is this receipt backed by a real human + a real signed accepted answer?" is the
+part that scales up the ladder: **optimistic L1** (publish receipts; fraud-prove a
+fake/omitted one; slash the bond) → **validity L2/L3** (a proof that every receipt
+is backed, so a bad set can't even be published). Same shape either way —
+**claim-by-proof** — operator as *prover/relayer*, never *decider*.
+
 ---
 
 ## 13. Testing posture (extends ARCHITECTURE.md §12)
