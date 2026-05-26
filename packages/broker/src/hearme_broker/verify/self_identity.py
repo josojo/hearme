@@ -16,12 +16,15 @@ DelegationToken. No Self proof is ever touched again after this.
 from __future__ import annotations
 
 import base64
+import logging
 from dataclasses import dataclass
 
 from ..config import Settings, get_settings
 from ..models.schemas import EnrollmentBundle, RejectionReason
 from .bridge_client import BridgeError, verify_self_proof
 from .predicates import PredicateError, derive_predicates
+
+log = logging.getLogger("hearme_broker.verify")
 
 
 class VerifyEnrollmentError(Exception):
@@ -104,6 +107,11 @@ async def verify_enrollment(
             result.bound_agent_key is not None
             and result.bound_agent_key != bundle.agent_key
         ):
+            log.warning(
+                "agent_key mismatch: bound=%r bundle=%r len(bound)=%d len(bundle)=%d",
+                result.bound_agent_key, bundle.agent_key,
+                len(result.bound_agent_key or ""), len(bundle.agent_key or ""),
+            )
             raise VerifyEnrollmentError(
                 RejectionReason.SELF_AGENT_BINDING_MISMATCH,
                 "verified userDefinedData does not equal agent_key",
