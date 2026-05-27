@@ -15,6 +15,7 @@ services:
       # The callback the Self app posts proofs to MUST be public HTTPS.
       SELF_ENDPOINT: https://3-121-186-133.sslip.io/self/callback
       SELF_ENDPOINT_TYPE: staging_https
+      SELF_CHAIN_ID: "11142220"  # Celo Sepolia (Self staging testnet)
 
   caddy:
     image: caddy:2

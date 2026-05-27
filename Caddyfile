@@ -3,6 +3,10 @@
 # resolves to the box's public IP), so the site is reachable over HTTPS and the
 # Self app has a public HTTPS callback for onboarding.
 3-121-186-133.sslip.io {
+	log {
+		output stdout
+		format console
+	}
 	encode gzip
 
 	# The Self app POSTs zk proofs to the bridge's /callback. Expose the bridge
