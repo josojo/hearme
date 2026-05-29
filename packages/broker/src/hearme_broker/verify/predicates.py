@@ -291,11 +291,31 @@ _BAND_BY_MAX: dict[int, str] = {
 }
 
 
+def _normalize_mrz_country(code: str) -> str:
+    """Strip ICAO Doc 9303 MRZ fillers and remap legacy national codes.
+
+    Some passports disclose nationality in MRZ form rather than ISO-3166. The
+    common case in the wild is German passports issued before the 2007 ePassport
+    rollout, which encode the country field as ``D<<`` (a single ``D`` padded
+    with the MRZ filler char ``<``) instead of ISO 3166-1 alpha-3 ``DEU``.
+    Strip the fillers, then remap the remaining special forms so the rest of
+    the mapper sees a well-formed alpha-2/alpha-3 value.
+
+    Returns the input unchanged when nothing applies (so DE/DEU/USA continue to
+    behave exactly as before).
+    """
+    cleaned = code.replace("<", "")
+    # Legacy German MRZ: `D` (post-filler strip) is Germany (Deutschland).
+    if cleaned == "D":
+        return "DE"
+    return cleaned
+
+
 def country_to_region(country: str) -> str:
     """Map an ISO-3166 country code (alpha-2 or alpha-3) to a continent code."""
     if not country:
         raise PredicateError("nationality missing")
-    code = country.strip().upper()
+    code = _normalize_mrz_country(country.strip().upper())
     if len(code) == 3:
         code = _ALPHA3_TO_ALPHA2.get(code, code)
     region = _COUNTRY_TO_CONTINENT.get(code)
@@ -326,7 +346,7 @@ def derive_predicates(*, nationality: str, satisfied_thresholds: list[int]) -> d
     ``country_to_region`` doubles as validation: an unmapped/blank nationality
     raises before we echo it back as ``country``.
     """
-    code = nationality.strip().upper()
+    code = _normalize_mrz_country(nationality.strip().upper())
     if len(code) == 3:
         code = _ALPHA3_TO_ALPHA2.get(code, code)
     region = country_to_region(code)
