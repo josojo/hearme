@@ -21,6 +21,7 @@ COPY packages/web/postcss.config.js ./
 COPY packages/web/next-env.d.ts ./
 COPY packages/web/drizzle.config.ts ./
 COPY packages/web/drizzle ./drizzle
+COPY packages/web/scripts ./scripts
 COPY packages/web/src ./src
 
 # `next build` would prerender the home page, which needs a build-time
