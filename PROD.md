@@ -27,7 +27,8 @@ curl -sS http://3.74.46.46:8000/v1/questions/open      # [] until someone asks o
 ```sh
 hearme-skill onboard \
   --bridge-url http://3.74.46.46:8787 \
-  --broker-url http://3.74.46.46:8000
+  --broker-url http://3.74.46.46:8000 \
+  --profile=minimal
 ```
 
 The skill is on your laptop with no public address, so it **polls the bridge**
