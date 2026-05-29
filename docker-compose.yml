@@ -53,6 +53,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
       self-bridge:
         condition: service_started
     environment:
@@ -109,6 +111,26 @@ services:
     ports:
       - "8787:8787"
 
+  # One-shot SQL migrator. Runs every `docker compose up` (re-runs are no-ops
+  # — applied versions are tracked in `_schema_migrations`). On a fresh volume,
+  # postgres's docker-entrypoint-initdb.d bootstraps `0000_init.sql` first, then
+  # this migrator baselines `0000_init` and applies any later deltas. On an
+  # existing volume (e.g. staging across schema changes), it just applies the
+  # new files. See packages/web/scripts/migrate.mjs.
+  migrator:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    container_name: hearme-migrator
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Admin DSN: hearme_web/hearme_broker roles can't ALTER.
+      MIGRATOR_DATABASE_URL: postgres://hearme_admin:hearme_admin_dev@postgres:5432/hearme
+    command: ["node", "scripts/migrate.mjs"]
+    restart: "no"
+
   web:
     build:
       context: .
@@ -118,6 +140,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     environment:
       # postgres-js DSN. scheme `postgres://` works for both Drizzle's
       # postgres driver and the Next.js runtime.
