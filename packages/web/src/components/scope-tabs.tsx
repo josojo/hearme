@@ -25,7 +25,7 @@ export function ScopeTabs({ active, counts, location }: Props) {
   return (
     <nav
       aria-label="Question scope"
-      className="grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm"
+      className="grid grid-cols-3 gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm sm:gap-2"
     >
       {tabs.map((t) => {
         const isActive = t.scope === active;
@@ -39,19 +39,19 @@ export function ScopeTabs({ active, counts, location }: Props) {
             href={href}
             aria-current={isActive ? "page" : undefined}
             className={
-              "group relative flex flex-col items-center justify-center gap-1 rounded-xl px-3 py-3 text-center text-sm font-medium transition " +
+              "group relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-2.5 text-center text-xs font-medium transition sm:px-3 sm:py-3 sm:text-sm " +
               (isActive
                 ? "bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-md"
                 : "text-slate-700 hover:bg-slate-50")
             }
           >
-            <span className="text-lg leading-none" aria-hidden>
+            <span className="text-base leading-none sm:text-lg" aria-hidden>
               {SCOPE_ICONS[t.scope]}
             </span>
-            <span className="truncate">{t.label}</span>
+            <span className="w-full truncate">{t.label}</span>
             <span
               className={
-                "rounded-full px-1.5 py-0.5 text-[11px] font-semibold leading-none " +
+                "rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none sm:text-[11px] " +
                 (isActive
                   ? "bg-white/25 text-white"
                   : "bg-slate-100 text-slate-700 group-hover:bg-slate-200")

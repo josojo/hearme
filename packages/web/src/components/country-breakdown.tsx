@@ -56,22 +56,22 @@ export function CountryBreakdown({
             key={e.code}
             className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-violet-300 hover:shadow"
           >
-            <div className="relative flex items-center gap-3 text-sm">
+            <div className="relative flex items-center gap-2 text-sm sm:gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold tabular-nums text-slate-600">
                 {i + 1}
               </span>
               {variant === "country" ? (
-                <span className="text-lg leading-none" aria-hidden>
+                <span className="text-base leading-none sm:text-lg" aria-hidden>
                   {countryFlag(e.code)}
                 </span>
               ) : null}
-              <span className="w-20 shrink-0 truncate font-medium text-slate-800 sm:w-32">
+              <span className="w-16 shrink-0 truncate text-xs font-medium text-slate-800 sm:w-32 sm:text-sm">
                 {labelFor(e.code, variant)}
               </span>
               <div className="min-w-0 flex-1">
                 <YesNoBar yes={e.yes} no={e.no} widthPct={widthPct} />
               </div>
-              <span className="w-24 shrink-0 text-right text-xs text-slate-700 sm:w-40">
+              <span className="shrink-0 text-right text-xs text-slate-700 sm:w-40">
                 <YesNoCount yes={e.yes} no={e.no} />
                 <span className="ml-1.5 hidden text-slate-500 tabular-nums sm:inline">
                   {sharePct.toFixed(0)}%

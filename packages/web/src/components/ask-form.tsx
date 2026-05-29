@@ -45,7 +45,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="inline-flex items-center justify-center rounded-full bg-brand-gradient px-6 py-2.5 text-sm font-semibold text-white shadow-glow transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex w-full items-center justify-center rounded-full bg-brand-gradient px-6 py-3 text-sm font-semibold text-white shadow-glow transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:py-2.5"
     >
       {pending ? "Posting…" : "Post question"}
     </button>
@@ -94,7 +94,7 @@ export function AskForm({
 
   return (
     <form action={formAction} className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <Field
           label="Your display name"
           name="displayName"
@@ -148,7 +148,7 @@ export function AskForm({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <div>
           <label className="block text-sm font-semibold text-slate-900">
             Who should hear this?
@@ -156,7 +156,7 @@ export function AskForm({
           <p className="mt-1 text-xs text-slate-500">
             Pick how broadly you want answers.
           </p>
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-3 grid grid-cols-3 gap-1.5 sm:gap-2">
             <ScopeChoice
               value="worldwide"
               icon="🌍"
@@ -245,7 +245,7 @@ export function AskForm({
         ) : null}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <Field
           label="Closes at"
           name="closesAt"
@@ -276,7 +276,7 @@ export function AskForm({
         </Field>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-stretch sm:justify-end">
         <SubmitButton />
       </div>
     </form>
@@ -297,17 +297,17 @@ function ScopeChoice(props: {
       onClick={props.onSelect}
       aria-pressed={props.active}
       className={
-        "flex flex-col items-center justify-center gap-1 rounded-xl border px-3 py-3 text-center transition " +
+        "flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-center transition sm:px-3 sm:py-3 " +
         (props.active
           ? "border-violet-500 bg-violet-50 shadow-sm ring-2 ring-violet-200"
           : "border-slate-200 bg-white hover:border-slate-300")
       }
     >
-      <span className="text-xl leading-none" aria-hidden>
+      <span className="text-lg leading-none sm:text-xl" aria-hidden>
         {props.icon}
       </span>
-      <span className="text-sm font-medium text-slate-900">{props.label}</span>
-      <span className="text-[11px] text-slate-500">{props.hint}</span>
+      <span className="text-xs font-medium text-slate-900 sm:text-sm">{props.label}</span>
+      <span className="hidden text-[11px] text-slate-500 sm:inline">{props.hint}</span>
     </button>
   );
 }

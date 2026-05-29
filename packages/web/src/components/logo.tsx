@@ -39,8 +39,8 @@ export function Logo({ size = 32, className }: Props) {
 export function LogoWordmark({ size = 32 }: { size?: number }) {
   return (
     <span className="flex items-center gap-2">
-      <Logo size={size} />
-      <span className="bg-brand-gradient bg-clip-text text-2xl font-bold tracking-tight text-transparent">
+      <Logo size={size} className="h-7 w-7 sm:h-8 sm:w-8" />
+      <span className="bg-brand-gradient bg-clip-text text-xl font-bold tracking-tight text-transparent sm:text-2xl">
         hearme
       </span>
     </span>

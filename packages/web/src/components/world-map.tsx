@@ -302,8 +302,8 @@ export function WorldMap({
       {/* Continent quick-jump — a keyboard- and touch-accessible way to drill
           in, since the country <path>s themselves are pointer-only. */}
       {drillTargets.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-medium text-slate-500">Jump to</span>
+        <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+          <span className="shrink-0 text-xs font-medium text-slate-500">Jump to</span>
           {drillTargets.map((code) => {
             const isOn = active === code;
             return (
@@ -317,7 +317,7 @@ export function WorldMap({
                   setHover(null);
                 }}
                 className={
-                  "rounded-full px-3 py-1 text-xs font-medium ring-1 transition " +
+                  "shrink-0 rounded-full px-3 py-1 text-xs font-medium ring-1 transition " +
                   (isOn
                     ? "bg-violet-600 text-white ring-violet-600"
                     : "bg-white text-slate-600 ring-slate-200 hover:text-violet-700 hover:ring-violet-300")
@@ -503,16 +503,16 @@ export function WorldMap({
         ) : null}
 
         {/* Legend strip — diverging no → yes scale. */}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
-          <div className="flex items-center gap-2">
-            <span className="font-medium uppercase tracking-wider text-rose-600">More no</span>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs text-slate-600">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="font-medium uppercase tracking-wider text-rose-600">No</span>
             <div
-              className="h-3 w-32 rounded-full ring-1 ring-slate-200"
+              className="h-3 w-24 rounded-full ring-1 ring-slate-200 sm:w-32"
               style={{ background: SPECTRUM_CSS }}
             />
-            <span className="font-medium uppercase tracking-wider text-emerald-600">More yes</span>
+            <span className="font-medium uppercase tracking-wider text-emerald-600">Yes</span>
           </div>
-          <div className="text-slate-500">
+          <div className="w-full text-slate-500 sm:w-auto">
             {!active
               ? "Shaded by each continent's yes-share"
               : activeHasCountryData

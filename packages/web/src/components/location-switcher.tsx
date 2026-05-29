@@ -57,26 +57,26 @@ export function LocationSwitcher({ location, scope }: Props) {
   }
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative self-start" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
         title="Switch the location you're viewing"
-        className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm transition hover:border-violet-300"
+        className="flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm transition hover:border-violet-300"
       >
         <span className="text-base leading-none" aria-hidden>
           {countryFlag(location.country)}
         </span>
-        <span className="font-medium text-slate-900">{location.countryName}</span>
-        <span className="text-slate-400">·</span>
-        <span className="text-slate-500">{location.continentName}</span>
+        <span className="truncate font-medium text-slate-900">{location.countryName}</span>
+        <span className="hidden text-slate-400 sm:inline">·</span>
+        <span className="hidden text-slate-500 sm:inline">{location.continentName}</span>
         <Chevron open={open} />
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-30 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="absolute left-0 right-auto z-30 mt-2 w-[calc(100vw-1.5rem)] max-w-xs overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl sm:left-auto sm:right-0 sm:w-64">
           <div className="border-b border-slate-100 p-2">
             <input
               autoFocus

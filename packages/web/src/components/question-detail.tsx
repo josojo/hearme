@@ -225,14 +225,14 @@ export function QuestionDetail(props: QuestionDetailProps) {
   const hasAnyBreakdown = hasGeography || hasAge || hasOther;
 
   return (
-    <article className="space-y-8">
-      <header className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+    <article className="space-y-6 sm:space-y-8">
+      <header className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:rounded-3xl sm:p-8">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50"
         />
         <div className="relative">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-slate-500">
             <ScopePill
               scope={question.scope}
               country={question.country}
@@ -253,16 +253,16 @@ export function QuestionDetail(props: QuestionDetailProps) {
             >
               {question.status}
             </span>
-            <span className="text-slate-300" aria-hidden>·</span>
+            <span className="hidden text-slate-300 sm:inline" aria-hidden>·</span>
             <span title={formatAbsoluteUTC(question.createdAt)}>
               opened {formatRelative(question.createdAt)}
             </span>
             <CloseLabel closesAt={question.closesAt} status={question.status} />
           </div>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+          <h1 className="mt-3 text-xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
             {question.text}
           </h1>
-          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600 sm:gap-3">
             <span className="inline-flex items-baseline gap-1.5 rounded-full bg-white/80 px-3 py-1 shadow-sm ring-1 ring-slate-200">
               <span className="text-base font-semibold text-slate-900 tabular-nums">
                 {totalAnswers}
@@ -273,7 +273,7 @@ export function QuestionDetail(props: QuestionDetailProps) {
             </span>
             <ShareButton title={question.text} />
             {question.status === "open" ? (
-              <span className="ml-auto">
+              <span className="sm:ml-auto">
                 <LiveRefresh />
               </span>
             ) : null}
@@ -334,7 +334,7 @@ export function QuestionDetail(props: QuestionDetailProps) {
       {hasAge ? (
         <section className="space-y-4">
           <SectionHeader title="Age" subtitle="by cohort" />
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <AgeChart data={parts.age} total={totalAnswers} />
           </div>
         </section>
@@ -343,7 +343,7 @@ export function QuestionDetail(props: QuestionDetailProps) {
       {hasOther ? (
         <section className="space-y-4">
           <SectionHeader title="Other dimensions" />
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <AggregateChart total={totalAnswers} byPredicate={parts.other} />
           </div>
         </section>
