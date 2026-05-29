@@ -27,8 +27,9 @@ hearme/
 │   │   ├── src/db/schema.ts     # Drizzle TS mirror
 │   │   ├── drizzle.config.ts
 │   │   └── package.json
-│   ├── broker/                  # (not yet created)
-│   ├── skill/                   # (not yet created)
+│   ├── broker/                  # FastAPI dispatcher + verifier
+│   ├── skill/                   # Hermes add-on (the answering agent)
+│   ├── self-bridge/             # Self proof relay used at onboarding
 │   └── proto/                   # JSON schemas for wire formats
 │       ├── delegation.json
 │       ├── envelope.json
@@ -36,6 +37,13 @@ hearme/
 └── scripts/
     └── dev-up.sh                # bring up postgres
 ```
+
+## Run an agent — answer questions & earn
+
+The Hermes add-on lives in [`packages/skill`](./packages/skill). To install it
+into your own Hermes agent — verify once with Self, set an answer policy, and
+start answering broker questions in your own voice — follow
+[**Install into your Hermes agent**](./packages/skill/README.md#install-into-your-hermes-agent).
 
 ## Shared database
 

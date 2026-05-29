@@ -48,7 +48,128 @@ In particular, **the Answerer never sees the DelegationToken or
 `unique_identifier`** — enforced by the function signature in `answerer.py`
 and asserted by `tests/test_identity_inference_separation.py`.
 
-## Install + run
+## Install into your Hermes agent
+
+This wires the hearme add-on into a Hermes agent (the
+[`hermes-agent`](https://pypi.org/project/hermes-agent/) runtime, Nous Research,
+MIT) so it answers broker questions from *your* conversation memory, in your
+voice. Two ways to run it — both share the one-time onboarding + policy steps
+(3–4).
+
+**Prerequisites:** Python 3.11+, a running **broker** (`packages/broker`) and
+**self-bridge** (`packages/self-bridge`) the skill can reach, and — for real
+inference — an OpenRouter API key. From the repo root,
+`docker compose up -d broker self-bridge` starts both (and the broker's
+Postgres) with the local defaults used below.
+
+### 1. Install the add-on into the same environment as Hermes
+
+```bash
+# from packages/skill/ — installs hearme-skill plus the Hermes runtime
+pip install -e '.[hermes]'
+```
+
+This pulls `hermes-agent>=0.14` and registers hearme under Python's
+`hermes.skills` entry-point group (see `pyproject.toml`):
+
+```toml
+[project.entry-points."hermes.skills"]
+hearme = "hearme_skill.skill:entrypoint"
+```
+
+When the package lives in the same environment as Hermes, Hermes discovers the
+skill by the name **`hearme`** and loads it by calling `entrypoint(host)`.
+Enable the discovered skill in your Hermes configuration per the Hermes runtime
+docs. Hermes hands `entrypoint` a `host` exposing `.llm` (required), `.memory`,
+`.channel`, and `.node_id`; the skill adapts each and starts the broker-polling
+loop.
+
+### 2. (Or) run it standalone, backed by a real Hermes agent
+
+If you're not embedding inside a Hermes host process, the skill ships a runner
+that spins up its own Hermes `AIAgent`:
+
+```bash
+# put your OpenRouter key where Hermes can read it (repo-root .env is gitignored)
+echo "OPEN_ROUTER_API_KEY=sk-or-..." >> ../../.env
+
+# boot the skill against a real Hermes agent
+HEARME_USE_HERMES=1 python -m hearme_skill.dev_runner
+```
+
+Without `HEARME_USE_HERMES=1` the runner falls back to a stub LLM + stub memory
+(no network) — handy for a dry run before you wire in real inference.
+
+### 3. Onboard once — verify with Self, get a broker-issued delegation
+
+Before the agent can answer it must prove a unique human, once. This generates
+the agent key, prints the Self QR codes (one per age threshold), waits for the
+proofs from the Self app, and registers them with the broker, which verifies
+them and returns the signed `DelegationToken` the skill replays on every answer:
+
+```bash
+hearme-skill onboard \
+  --bridge-url http://localhost:8787 \
+  --broker-url http://localhost:8000
+```
+
+Scan each QR with the Self app. The mock-passport flow works for local dev when
+the self-bridge runs with `SELF_MOCK_PASSPORT=1` (the default in
+`docker-compose.yml`). Your passport never leaves your phone — the broker
+verifies the zero-knowledge proof and never sees raw passport data. (Dev
+shortcut: replay a captured proof fixture instead of scanning — see the dev
+quickstart below.)
+
+### 4. Configure your answer policy
+
+Everything defaults to **off** (§1.1). Author `~/.hermes/hearme/policy.yaml` to
+opt categories in:
+
+```yaml
+topic_allowlist: [coffee, travel]
+topic_blocklist: [politics]
+max_answers_per_day: 50
+auto_answer: false              # prompt before every answer
+auto_submit_window_seconds: 0   # 0 = always preview; >0 = veto window
+```
+
+With `auto_answer: false` (the default) the skill previews every answer for your
+approval — the §1.12 "override is sacred" guarantee. See the fuller sample
+[below](#sample-policyyaml).
+
+### 5. (Optional) seed your agent's memory, then watch it answer
+
+Answers are inferred from what Hermes already knows about you. To try it
+immediately, seed a fact:
+
+```bash
+hearme-skill hermes-chat "Please remember: I really hate cilantro."
+```
+
+Once a token is stored and the loop is running, the agent polls the broker,
+answers eligible questions from your memory, anonymizes + signs each answer, and
+submits it. The only persistence is the local audit trail at
+`~/.hermes/hearme/ledger.sqlite` (§1.6).
+
+### Key environment variables
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `HEARME_USE_HERMES` | `0` | `1` = drive a real Hermes agent (else stub LLM/memory). |
+| `HEARME_SKILL_BROKER_URL` | `http://localhost:8000` | Broker base URL. |
+| `HEARME_SKILL_SELF_BRIDGE_URL` | `http://localhost:8787` | self-bridge URL (onboarding only). |
+| `HEARME_SKILL_ROOT_DIR` | `~/.hermes/hearme/` | Where the agent key, token, policy, and ledger live. |
+| `HEARME_HERMES_MODEL` | `google/gemini-2.5-flash-lite` | Hermes inference model (via OpenRouter). |
+| `OPEN_ROUTER_API_KEY` / `OPENROUTER_API_KEY` | — | Required whenever `HEARME_USE_HERMES=1`. |
+
+The full list of knobs is in [Configuration knobs](#configuration-knobs-env-vars-prefix-hearme_skill_)
+and [Real Hermes integration](#real-hermes-integration).
+
+## Local dev quickstart (stub mode)
+
+> To install into a real agent, follow **[Install into your Hermes agent](#install-into-your-hermes-agent)**
+> above. This quickstart uses the no-network stub LLM/memory and the dev
+> fixture replay.
 
 ```bash
 # from packages/skill/
