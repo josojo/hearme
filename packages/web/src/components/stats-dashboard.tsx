@@ -17,8 +17,8 @@ export function StatsDashboard({ stats }: Props) {
     avg >= 100 ? Math.round(avg).toLocaleString() : avg.toFixed(1);
 
   return (
-    <section className="space-y-8">
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+    <section className="space-y-6 sm:space-y-8">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:rounded-3xl sm:p-8">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50"
@@ -26,7 +26,7 @@ export function StatsDashboard({ stats }: Props) {
         <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-fuchsia-200/40 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-violet-200/40 blur-3xl" />
         <div className="relative space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
             Platform stats
           </h1>
           <p className="max-w-xl text-sm text-slate-600">
@@ -42,7 +42,7 @@ export function StatsDashboard({ stats }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
         <StatCard
           label="Registered agents"
           value={formatInt(stats.registeredAgents)}
@@ -79,7 +79,7 @@ export function StatsDashboard({ stats }: Props) {
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
           Earnings
         </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
           <PendingCard
             label="Total payout"
             hint="Sum paid to respondents, all time"
@@ -108,11 +108,11 @@ function StatCard({
   hint: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
         {label}
       </p>
-      <p className="mt-2 bg-brand-gradient bg-clip-text text-3xl font-bold tabular-nums text-transparent">
+      <p className="mt-2 break-words bg-brand-gradient bg-clip-text text-2xl font-bold tabular-nums text-transparent sm:text-3xl">
         {value}
       </p>
       <p className="mt-1 text-xs text-slate-500">{hint}</p>
@@ -122,7 +122,7 @@ function StatCard({
 
 function PendingCard({ label, hint }: { label: string; hint: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 p-5">
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 p-4 sm:p-5">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
           {label}
@@ -131,7 +131,7 @@ function PendingCard({ label, hint }: { label: string; hint: string }) {
           Not tracked yet
         </span>
       </div>
-      <p className="mt-2 text-3xl font-bold tabular-nums text-slate-300">—</p>
+      <p className="mt-2 text-2xl font-bold tabular-nums text-slate-300 sm:text-3xl">—</p>
       <p className="mt-1 text-xs text-slate-400">{hint}</p>
     </div>
   );

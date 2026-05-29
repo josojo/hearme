@@ -43,23 +43,23 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
       <body className="font-sans">
-        <div className="mx-auto max-w-4xl px-4 py-6 sm:py-10">
-          <header className="mb-10 flex items-center justify-between border-b border-slate-200/70 pb-5">
+        <div className="mx-auto max-w-4xl px-3 py-5 sm:px-4 sm:py-10">
+          <header className="mb-8 flex flex-wrap items-center justify-between gap-y-2 border-b border-slate-200/70 pb-4 sm:mb-10 sm:pb-5">
             <Link href="/" className="flex items-center" aria-label="Hearme home">
               <LogoWordmark />
             </Link>
-            <nav className="flex items-center gap-1.5 sm:gap-3 text-sm">
+            <nav className="flex items-center gap-1 text-sm sm:gap-3">
               <HowItWorks />
               <EarnExplainer />
               <Link
                 href="/"
-                className="rounded-full px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-100"
+                className="hidden rounded-full px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-100 sm:inline-flex"
               >
                 Questions
               </Link>
               <Link
                 href="/ask"
-                className="inline-flex items-center gap-1.5 rounded-full bg-brand-gradient px-4 py-2 font-medium text-white shadow-glow transition hover:opacity-95"
+                className="inline-flex items-center gap-1 rounded-full bg-brand-gradient px-3 py-1.5 font-medium text-white shadow-glow transition hover:opacity-95 sm:gap-1.5 sm:px-4 sm:py-2"
               >
                 <span aria-hidden>+</span> Ask
               </Link>

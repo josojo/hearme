@@ -48,7 +48,7 @@ export function QuestionCard(props: QuestionCardProps) {
   return (
     <Link
       href={`/q/${props.id}`}
-      className="group relative block overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-lg"
+      className="group relative block overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-lg sm:p-5"
     >
       <span
         aria-hidden
