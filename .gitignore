@@ -18,5 +18,7 @@ venv/
 .env.local
 *.env
 
+PROD.md
+
 # OS
 .DS_Store
