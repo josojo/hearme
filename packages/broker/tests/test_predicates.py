@@ -32,6 +32,35 @@ def test_country_to_region_unmapped_raises():
         country_to_region("")
 
 
+# ICAO Doc 9303 MRZ-formatted nationality codes: passports may disclose the raw
+# MRZ field rather than ISO-3166. The most common one in the wild is German
+# passports issued before the 2007 ePassport rollout, where the country field
+# is ``D<<`` ("D" padded with MRZ filler chars). The mapper must strip the
+# fillers and remap to ``DE``.
+@pytest.mark.parametrize(
+    "country,region",
+    [
+        ("D<<", "EU"),     # legacy German MRZ form
+        ("D", "EU"),       # same code after stripping fillers
+        ("d<<", "EU"),     # lower-case + fillers
+        ("USA<", "NA"),    # trailing filler on an otherwise valid alpha-3
+        ("DEU<<", "EU"),   # alpha-3 with trailing fillers
+    ],
+)
+def test_country_to_region_mrz(country, region):
+    assert country_to_region(country) == region
+
+
+def test_derive_predicates_mrz_germany():
+    # An incoming legacy MRZ German code must produce the normalized alpha-2
+    # form in the disclosed `country` field, not the raw `D<<`.
+    assert derive_predicates(nationality="D<<", satisfied_thresholds=[18]) == {
+        "region": "EU",
+        "country": "DE",
+        "age_band": "18+",
+    }
+
+
 @pytest.mark.parametrize(
     "satisfied,band",
     [
