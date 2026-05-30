@@ -43,10 +43,17 @@ hermes = [
 ]
 
 # Discovered by hermes-agent's plugin loader (entry-point group
-# `hermes_agent.plugins`). Hermes calls `register(ctx)` at load time; see
-# plugin.py. Alternatively, install as a directory under ~/.hermes/plugins/.
+# `hermes_agent.plugins`). The value MUST resolve to the module that contains
+# `register(ctx)` — NOT to the function itself. Hermes' loader calls
+# `ep.load()` and then `getattr(module, "register")`; if the entry point is
+# `pkg.mod:register`, ep.load() returns the function, getattr(<func>,
+# "register") is None, and the loader logs "no register() function" and gives
+# up. See hermes_cli/plugins.py:_load_entrypoint_module.
+# Alternatively, install as a directory under ~/.hermes/plugins/ (but note
+# Hermes dedupes by plugin name and the entry-point path wins, so this
+# pyproject value must be correct either way).
 [project.entry-points."hermes_agent.plugins"]
-hearme = "hearme_skill.plugin:register"
+hearme = "hearme_skill.plugin"
 
 [project.scripts]
 hearme-skill = "hearme_skill.skill:cli"
