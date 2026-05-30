@@ -14,12 +14,20 @@ API key and no model SDK imported here — that is the whole point of the
 redesign.
 
 The Hermes contract (verified against 0.14.0,
-``hermes_cli/plugins.py:PluginContext``):
+``hermes_cli/plugins.py:_load_entrypoint_module`` + ``PluginContext``):
 
+* The ``hermes_agent.plugins`` entry-point value MUST resolve to the **module**
+  that contains ``register`` (e.g. ``hearme_skill.plugin``), NOT to the
+  function (``hearme_skill.plugin:register``). Hermes calls ``ep.load()`` and
+  then ``getattr(module, "register")``; if you point at the function directly,
+  ``ep.load()`` returns it, ``getattr(<func>, "register")`` is ``None``, and
+  Hermes silently logs ``no register() function`` and drops the plugin.
 * ``register(ctx)`` is the entry function.
-* ``ctx.register_tool(name, toolset, schema, handler, ...)`` — ``schema`` is an
-  OpenAI-style ``{"name", "description", "parameters"}`` dict; ``handler`` is a
-  sync ``(args: dict, **kwargs) -> str`` returning a JSON string.
+* ``ctx.register_tool(name, toolset, schema, handler, check_fn=None,
+  requires_env=None, is_async=False, description='', emoji='',
+  override=False)`` — ``schema`` is an OpenAI-style ``{"name", "description",
+  "parameters"}`` dict; ``handler`` is a sync ``(args: dict, **kwargs) -> str``
+  returning a JSON string.
 """
 
 from __future__ import annotations
