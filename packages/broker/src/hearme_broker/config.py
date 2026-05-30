@@ -88,6 +88,24 @@ class Settings(BaseSettings):
     # working; flip in any deployed environment (docs/DEPLOYMENT.md §2).
     production_mode: bool = False
 
+    # Per-client rate limiting on write endpoints (ratelimit.py). In-memory and
+    # per-process — single-instance broker is the v0 deployment shape (§2). Set
+    # any limit to 0 to disable that rule. Defaults chosen for "comfortable for
+    # honest agents and askers, fatal for an unattended flood":
+    #   * register/hour:  3 — one human enrols once; mock-passport staging may
+    #     reset more often. Conservative.
+    #   * envelopes/min: 30 — agents poll every ~30s; even a chatty agent
+    #     handling many open questions stays well under one per second.
+    #   * revoke/min:    10 — override is sacred but human-rate.
+    ratelimit_enabled: bool = True
+    ratelimit_register_per_hour: int = 3
+    ratelimit_envelopes_per_minute: int = 30
+    ratelimit_revoke_per_minute: int = 10
+    # Trust X-Real-IP / X-Forwarded-For for client identification. Only safe
+    # behind a known proxy (Caddy, in the v0 deployment). Set False when the
+    # broker is exposed directly — otherwise any client can forge their IP.
+    ratelimit_trust_proxy_headers: bool = True
+
 
 def get_settings() -> Settings:
     return Settings()  # type: ignore[call-arg]

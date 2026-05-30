@@ -12,11 +12,18 @@
 // Pure validation lives in ./validate-question.ts so non-server code can
 // import it (the "use server" rule forces every export of this module to
 // be an async function).
+//
+// Spam mitigation: per-IP sliding-window cap on question creation. Asker auth
+// is deferred to v0.2 (ARCHITECTURE §11) so the display name is freely chosen
+// and unusable as an identifier — the IP, behind Caddy, is the only stable
+// per-client signal. See `lib/rate-limit.ts` for the policy + caveats.
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { db } from "@/db/client";
 import { askers, questions } from "@/db/schema";
+import { checkRateLimit, clientIdFromHeaders } from "@/lib/rate-limit";
 import {
   validateCreateQuestion,
   type CreateQuestionInput,
@@ -68,6 +75,20 @@ export async function createQuestionAction(
   _prevState: unknown,
   formData: FormData,
 ): Promise<CreateQuestionResult> {
+  // Per-IP rate limit BEFORE validation/DB work: a flooder that sends bogus
+  // forms shouldn't burn DB writes or validation cycles. The "_form" pseudo
+  // field surfaces this as a form-level error rather than under any one input.
+  const requestHeaders = await headers();
+  const limit = checkRateLimit(clientIdFromHeaders(requestHeaders));
+  if (!limit.ok) {
+    return {
+      ok: false,
+      errors: {
+        _form: `Too many questions from this address. Try again in ${limit.retryAfterSeconds}s.`,
+      },
+    };
+  }
+
   const closesAtIso = (formData.get("closesAtIso") ?? "").toString();
   const closesAtRaw = (formData.get("closesAt") ?? "").toString();
   const parsedDate = closesAtIso
