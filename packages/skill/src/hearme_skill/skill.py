@@ -244,6 +244,30 @@ def _cmd_onboard(args: argparse.Namespace) -> int:
         print(f"onboarding failed: {exc}", file=sys.stderr)
         return 2
     print(f"Stored delegation token (expires {token.expires_at.isoformat()})")
+    # Persist the broker/bridge URLs the user actually onboarded against, so the
+    # Hermes cron job (which starts in a fresh process and doesn't inherit this
+    # shell's env) hits the same broker instead of falling back to localhost.
+    # Only writes when the URL was explicitly non-default — see _persist_broker_urls.
+    try:
+        defaults = get_settings().__class__()  # fresh defaults, ignoring current env
+        result = _persist_broker_urls(
+            broker_url=broker_url,
+            bridge_url=bridge_url,
+            broker_default=defaults.broker_url,
+            bridge_default=defaults.self_bridge_url,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(
+            f"Note: could not persist broker URLs to ~/.hermes/.env ({exc}). "
+            "Set HEARME_SKILL_BROKER_URL / HEARME_SKILL_SELF_BRIDGE_URL there "
+            "by hand so the cron job inherits them.",
+            file=sys.stderr,
+        )
+    else:
+        if result is not None:
+            path, written = result
+            keys = ", ".join(sorted(written))
+            print(f"Persisted {keys} to {path}.")
     _try_install_plugin_after_onboard()
     _try_schedule_after_onboard()
     return 0
@@ -358,6 +382,86 @@ def _plugin_dir() -> Path:
     return Path.home() / ".hermes" / "plugins" / _PLUGIN_DIRNAME
 
 
+def _hermes_env_path() -> Path:
+    """The env file the Hermes gateway/cron load on startup.
+
+    Same file the gateway tells you to edit in its `GATEWAY_ALLOW_ALL_USERS`
+    warning; we treat it as the canonical place for `HEARME_SKILL_*` overrides.
+    """
+
+    return Path.home() / ".hermes" / ".env"
+
+
+def upsert_hermes_env(
+    updates: dict[str, str], *, env_path: Path | None = None
+) -> Path:
+    """Idempotent upsert of ``KEY=value`` lines in ``~/.hermes/.env``.
+
+    For each ``(key, value)`` in ``updates``, replaces the existing line that
+    starts with ``KEY=`` (or ``export KEY=``) and otherwise appends it. Comments,
+    blank lines, and unrelated keys are preserved byte-for-byte. Creates the
+    parent directory and the file if either is missing.
+
+    Returns the path written. Caller decides what to log — this function is
+    silent so it can be reused from onboarding and install-plugin without
+    duplicating the message.
+    """
+
+    target = env_path or _hermes_env_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    existing = target.read_text() if target.exists() else ""
+    # Preserve a trailing newline policy: if the file is non-empty and lacks
+    # a final newline, the replaced-or-appended block re-establishes one.
+    lines = existing.splitlines()
+    remaining = dict(updates)
+    out: list[str] = []
+    for line in lines:
+        stripped = line.lstrip()
+        # Match `KEY=...` or `export KEY=...`; ignore comments.
+        if stripped.startswith("#") or "=" not in stripped:
+            out.append(line)
+            continue
+        head = stripped
+        if head.startswith("export "):
+            head = head[len("export ") :].lstrip()
+        key = head.split("=", 1)[0].strip()
+        if key in remaining:
+            out.append(f"{key}={remaining.pop(key)}")
+        else:
+            out.append(line)
+    for key, value in remaining.items():
+        out.append(f"{key}={value}")
+    target.write_text("\n".join(out) + ("\n" if out else ""))
+    return target
+
+
+def _persist_broker_urls(
+    *,
+    broker_url: str | None,
+    bridge_url: str | None,
+    broker_default: str,
+    bridge_default: str,
+) -> tuple[Path, dict[str, str]] | None:
+    """Persist any explicitly-provided URLs to ``~/.hermes/.env``.
+
+    "Explicit" means the value differs from the localhost-default config
+    fallback — we don't want `hearme-skill onboard` on a dev box to write
+    `HEARME_SKILL_BROKER_URL=http://localhost:8000` when the user never asked
+    for that. Returns ``(env_path, written)`` if anything was written, else
+    ``None``.
+    """
+
+    updates: dict[str, str] = {}
+    if broker_url and broker_url != broker_default:
+        updates["HEARME_SKILL_BROKER_URL"] = broker_url
+    if bridge_url and bridge_url != bridge_default:
+        updates["HEARME_SKILL_SELF_BRIDGE_URL"] = bridge_url
+    if not updates:
+        return None
+    path = upsert_hermes_env(updates)
+    return path, updates
+
+
 def install_plugin_dir(*, plugin_dir: Path | None = None) -> Path:
     """Write the Hermes directory-install drop-in. Idempotent.
 
@@ -402,6 +506,31 @@ def _restart_gateway() -> tuple[bool, str]:
 def _cmd_install_plugin(args: argparse.Namespace) -> int:
     target = install_plugin_dir()
     print(f"Wrote Hermes plugin drop-in to {target}")
+    # Same persistence as _cmd_onboard: useful when a user already onboarded
+    # against a remote broker but is hitting connect errors from the cron job
+    # because no env was ever written. `hearme-skill install-plugin
+    # --broker-url ... --bridge-url ...` is the recovery command.
+    broker_url = getattr(args, "broker_url", None)
+    bridge_url = getattr(args, "bridge_url", None)
+    if broker_url or bridge_url:
+        try:
+            defaults = get_settings().__class__()
+            result = _persist_broker_urls(
+                broker_url=broker_url,
+                bridge_url=bridge_url,
+                broker_default=defaults.broker_url,
+                bridge_default=defaults.self_bridge_url,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"Could not persist broker URLs to ~/.hermes/.env ({exc}).",
+                file=sys.stderr,
+            )
+        else:
+            if result is not None:
+                path, written = result
+                keys = ", ".join(sorted(written))
+                print(f"Persisted {keys} to {path}.")
     if args.no_restart:
         print("Restart the Hermes gateway to load the plugin:")
         print("  systemctl --user restart hermes-gateway")
@@ -555,6 +684,20 @@ def cli() -> int:
         "--no-restart",
         action="store_true",
         help="Skip the `systemctl --user restart hermes-gateway` step.",
+    )
+    p_install.add_argument(
+        "--broker-url",
+        default=None,
+        help=(
+            "Persist HEARME_SKILL_BROKER_URL=<url> in ~/.hermes/.env so the"
+            " Hermes cron job inherits it. Use when you already onboarded but"
+            " the cron job fails with 'All connection attempts failed'."
+        ),
+    )
+    p_install.add_argument(
+        "--bridge-url",
+        default=None,
+        help="Persist HEARME_SKILL_SELF_BRIDGE_URL=<url> in ~/.hermes/.env.",
     )
     p_install.set_defaults(func=_cmd_install_plugin)
 
