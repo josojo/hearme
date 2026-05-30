@@ -237,6 +237,19 @@ Already onboarded and just need to re-register the cron job? It's idempotent
 # "$GATEWAY_BIN/hearme-skill" schedule --schedule "0 * * * *"   # or a cron expression
 ```
 
+`onboard` automatically persists the `--broker-url` / `--bridge-url` you
+onboarded against to `~/.hermes/.env` so the cron job (which starts in a fresh
+process and doesn't inherit your shell env) hits the same broker — otherwise it
+falls back to `http://localhost:8000` and the next `hearme_list_open_questions`
+call dies with `httpx.ConnectError: All connection attempts failed`. If you
+already onboarded without that, do a one-shot recovery (no need to re-onboard):
+
+```bash
+"$GATEWAY_BIN/hearme-skill" install-plugin \
+  --broker-url http://3.74.46.46:8000 \
+  --bridge-url http://3.74.46.46:8787
+```
+
 ### Why this install shape (and not `hermes plugins install`)
 
 Hermes ships two builtin install commands; neither fits a monorepo Python plugin:
