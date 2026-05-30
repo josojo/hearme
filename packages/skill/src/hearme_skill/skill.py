@@ -15,7 +15,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import shutil
+import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -241,6 +244,7 @@ def _cmd_onboard(args: argparse.Namespace) -> int:
         print(f"onboarding failed: {exc}", file=sys.stderr)
         return 2
     print(f"Stored delegation token (expires {token.expires_at.isoformat()})")
+    _try_install_plugin_after_onboard()
     _try_schedule_after_onboard()
     return 0
 
@@ -305,6 +309,143 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
     verb = "created" if result["created"] else "already present"
     print(f"cron job '{JOB_NAME}' {verb} (id={result['job_id']}).")
     return 0
+
+
+# --- Hermes plugin self-install --------------------------------------------
+#
+# Hermes' built-in plugin installers don't fit our shape:
+#
+# * `hermes plugins install owner/repo` clones the repo root and expects
+#   plugin.yaml there — but ours lives in `packages/skill/`, so the loader
+#   silently no-ops (the directory exists but registers no tools).
+# * The `hermes_agent.plugins` entry point we advertise in `pyproject.toml`
+#   IS discovered, but discovery is lazy in some Hermes versions and may not
+#   fire at gateway boot. We don't want users guessing.
+#
+# Deterministic path: drop a 2-file directory under `~/.hermes/plugins/hearme/`
+# (manifest + tiny shim that re-exports `register`), restart the gateway, done.
+# `install-plugin` does exactly that. `onboard` also calls it automatically so
+# the end-user steps collapse to:
+#
+#   pip install 'git+https://github.com/josojo/hearme.git#subdirectory=packages/skill'
+#   hearme-skill onboard --bridge-url ... --broker-url ...
+
+_PLUGIN_DIRNAME = "hearme"
+_PLUGIN_SHIM = "from hearme_skill.plugin import register  # noqa: F401\n"
+
+# Embedded manifest. Kept in sync by hand with `packages/skill/plugin.yaml` —
+# they're both ~20 lines and rarely change. The tool names below mirror the
+# `register_tool` calls in `plugin.py`; if they drift, `plugin.yaml` is the
+# canonical reference and tests/test_tools.py will catch the schema break.
+_PLUGIN_MANIFEST = """\
+name: hearme
+version: 0.0.1
+description: >-
+  Answer public yes/no questions on the user's behalf, using the host agent's
+  own model and memory. Inference needs no extra API key; a cron job drives the
+  answering cycle.
+author: Hearme
+kind: standalone
+provides_tools:
+  - hearme_list_open_questions
+  - hearme_submit_answer
+"""
+
+
+def _plugin_dir() -> Path:
+    """Where Hermes scans for directory-installed plugins."""
+
+    return Path.home() / ".hermes" / "plugins" / _PLUGIN_DIRNAME
+
+
+def install_plugin_dir(*, plugin_dir: Path | None = None) -> Path:
+    """Write the Hermes directory-install drop-in. Idempotent.
+
+    Returns the directory written. Always overwrites the two files so a stale
+    half-cloned install (e.g. from a failed `hermes plugins install`) is
+    cleanly replaced.
+    """
+
+    target = plugin_dir or _plugin_dir()
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "plugin.yaml").write_text(_PLUGIN_MANIFEST)
+    (target / "__init__.py").write_text(_PLUGIN_SHIM)
+    return target
+
+
+def _restart_gateway() -> tuple[bool, str]:
+    """Best-effort `systemctl --user restart hermes-gateway`.
+
+    Returns (success, message). Failure is non-fatal — the user can restart by
+    hand — but we surface a clear hint so they know what's needed.
+    """
+
+    systemctl = shutil.which("systemctl")
+    if not systemctl:
+        return False, "systemctl not found (not a systemd host?)"
+    try:
+        subprocess.run(
+            [systemctl, "--user", "restart", "hermes-gateway"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return True, "restarted hermes-gateway"
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip() or f"exit {exc.returncode}"
+        return False, f"systemctl restart failed: {detail}"
+    except subprocess.TimeoutExpired:
+        return False, "systemctl restart timed out after 30s"
+
+
+def _cmd_install_plugin(args: argparse.Namespace) -> int:
+    target = install_plugin_dir()
+    print(f"Wrote Hermes plugin drop-in to {target}")
+    if args.no_restart:
+        print("Restart the Hermes gateway to load the plugin:")
+        print("  systemctl --user restart hermes-gateway")
+        return 0
+    ok, msg = _restart_gateway()
+    if ok:
+        print(msg.capitalize() + ".")
+    else:
+        print(
+            f"Could not auto-restart the gateway ({msg}). Restart it manually:\n"
+            "  systemctl --user restart hermes-gateway",
+            file=sys.stderr,
+        )
+    return 0
+
+
+def _try_install_plugin_after_onboard() -> None:
+    """Best-effort: drop in the plugin directory + restart the gateway.
+
+    Called from `_cmd_onboard` so the canonical user flow is just one pip
+    command + one `hearme-skill onboard ...`. Failures print a hint but never
+    break onboarding — the user can run `hearme-skill install-plugin` later.
+    """
+
+    try:
+        target = install_plugin_dir()
+    except Exception as exc:  # noqa: BLE001
+        print(
+            f"Note: could not write the Hermes plugin drop-in ({exc}). "
+            "Run `hearme-skill install-plugin` to retry.",
+            file=sys.stderr,
+        )
+        return
+    print(f"Installed Hermes plugin drop-in at {target}.")
+    ok, msg = _restart_gateway()
+    if ok:
+        print("Restarted hermes-gateway; the hearme tools are now loaded.")
+    else:
+        print(
+            f"Plugin written, but the gateway was not restarted ({msg}). "
+            "Restart it to load the tools:\n"
+            "  systemctl --user restart hermes-gateway",
+            file=sys.stderr,
+        )
 
 
 def _cmd_chatgpt_import(args: argparse.Namespace) -> int:
@@ -402,6 +543,20 @@ def cli() -> int:
         help="Override the provider for this job (default: the Hermes agent's configured provider).",
     )
     p_sched.set_defaults(func=_cmd_schedule)
+
+    p_install = sub.add_parser(
+        "install-plugin",
+        help=(
+            "Drop the Hermes plugin manifest + shim under ~/.hermes/plugins/hearme/"
+            " and restart the gateway. Run this once after `pip install hearme-skill`."
+        ),
+    )
+    p_install.add_argument(
+        "--no-restart",
+        action="store_true",
+        help="Skip the `systemctl --user restart hermes-gateway` step.",
+    )
+    p_install.set_defaults(func=_cmd_install_plugin)
 
     p_cg_import = sub.add_parser(
         "chatgpt-import",
