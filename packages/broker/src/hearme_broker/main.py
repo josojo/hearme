@@ -13,6 +13,7 @@ from fastapi import FastAPI
 
 from .config import get_settings
 from .db import close_pool, init_pool
+from .ratelimit import RateLimitMiddleware, build_default_limiter
 from .routes.envelopes import router as envelopes_router
 from .routes.questions import router as questions_router
 from .routes.register import router as register_router
@@ -42,6 +43,21 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         description="Hearme v0 dispatcher and envelope verifier. See ARCHITECTURE.md §5.",
     )
+    settings = get_settings()
+    if settings.ratelimit_enabled:
+        limiter = build_default_limiter(settings)
+        app.add_middleware(
+            RateLimitMiddleware,
+            limiter=limiter,
+            trust_proxy_headers=settings.ratelimit_trust_proxy_headers,
+        )
+        if list(limiter.configured_routes()):
+            log.info(
+                "ratelimit: enabled for %s (trust_proxy_headers=%s)",
+                list(limiter.configured_routes()),
+                settings.ratelimit_trust_proxy_headers,
+            )
+
     app.include_router(questions_router)
     app.include_router(register_router)
     app.include_router(envelopes_router)
@@ -49,7 +65,7 @@ def create_app() -> FastAPI:
 
     # DANGER: testing-only synthetic-identity registration. Off unless explicitly
     # enabled; never mount in production (see routes/dev.py).
-    if get_settings().dev_insecure_register:
+    if settings.dev_insecure_register:
         from .routes.dev import router as dev_router
 
         app.include_router(dev_router)
